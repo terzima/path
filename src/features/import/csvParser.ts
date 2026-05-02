@@ -2,7 +2,7 @@ import Papa from "papaparse";
 import { createId } from "../../lib/id";
 import { parseDurationText } from "../../lib/duration";
 import type { EnergyType } from "../../lib/types";
-import type { ImportDraftTask } from "./importDraft";
+import type { ImportAction, ImportDraftTask } from "./importDraft";
 
 type Row = Record<string, string | undefined>;
 
@@ -14,15 +14,22 @@ export function parseCsvToDrafts(csv: string): ImportDraftTask[] {
   });
 
   return result.data
-    .filter((row) => (row.title ?? "").trim().length > 0)
-    .map((row) => {
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => (row.title ?? row.externalId ?? "").trim().length > 0)
+    .map(({ row, index }) => {
       const duration = parseDurationText(row.duration);
       return {
         id: createId(),
-        sequenceIndex: parseOptionalNumber(row.sequence),
-        title: row.title!.trim(),
+        externalId: row.externalId?.trim() || null,
+        order: parseOptionalNumber(row.order ?? row.sequence),
+        sourceRow: index,
+        action: parseAction(row.action),
+        sequenceIndex: null,
+        title: row.title?.trim() || "(Untitled task)",
         description: row.description ?? "",
+        explicitDate: row.date?.trim() || null,
         scheduledDate: null,
+        spanDays: parseSpanDays(row.spanDays),
         durationHours: duration.durationHours,
         defaultedDuration: duration.defaultedDuration,
         energyType: parseEnergy(row.energy),
@@ -33,6 +40,19 @@ export function parseCsvToDrafts(csv: string): ImportDraftTask[] {
         sequenceGroupId: row.sequenceGroupId?.trim() || null,
       };
     });
+}
+
+function parseSpanDays(value: string | undefined): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1) return 1;
+  return Math.floor(parsed);
+}
+
+function parseAction(value: string | undefined): ImportAction {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === "delete") return "delete";
+  if (normalized === "archive") return "archive";
+  return "upsert";
 }
 
 function parseOptionalNumber(value: string | undefined): number | null {

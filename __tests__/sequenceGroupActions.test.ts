@@ -11,6 +11,7 @@ import type { Task } from "../src/lib/types";
 function task(sequenceGroupId: string | null, sequenceIndex: number | null = 4): Task {
   return {
     id: "task-1",
+    externalId: null,
     folderId: "rolo",
     title: "Task",
     description: "",
