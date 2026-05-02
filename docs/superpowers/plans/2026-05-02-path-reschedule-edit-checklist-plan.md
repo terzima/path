@@ -18,6 +18,13 @@ Implement these product decisions:
 - A separate Upcoming route remains available for broader future planning.
 - Overview task headers display `Folder - Task Name`.
 - Folder pages use an `Edit` button, not `Select`, for multi-task selection.
+- Folder active task lists are ordered by scheduled date, not creation/add time.
+- Completed tasks leave the active folder list and appear in that folder's Archive.
+- Folder Archive lets the user restore completed tasks back to active.
+- Folder Archive groups completed tasks by month.
+- Folder Archive allows deleting one archived task.
+- Folder Archive allows selecting multiple archived tasks for bulk delete.
+- Folder Archive supports deleting an entire archived month after confirmation.
 - Row-level `Move` opens the same bulk shift modal with one selected task.
 - Task rows also show an `Edit` action.
 - Existing tasks are fully editable through the task form.
@@ -42,10 +49,12 @@ Do not add accounts, sync, notifications, calendar integration, or polished PDF 
 - Modify: `src/features/overview/useOverview.ts`
 - Modify: `src/features/overview/OverviewScreen.tsx`
 - Modify: `src/features/folders/FolderDetailScreen.tsx`
+- Create: `src/features/folders/FolderArchiveScreen.tsx`
 - Modify: `src/features/import/ImportReviewScreen.tsx`
 - Modify: `src/features/scheduling/BulkShiftScreen.tsx`
 - Modify: `app/_layout.tsx`
 - Create: `app/upcoming.tsx`
+- Create: `app/folders/[folderId]/archive.tsx`
 - Create: `src/features/upcoming/UpcomingScreen.tsx`
 - Create: `__tests__/monthlyRecurrence.test.ts`
 - Create: `__tests__/generalFolder.test.ts`
@@ -1140,7 +1149,342 @@ git commit -m "feat: improve form keyboard handling"
 
 ---
 
-### Task 8: Final Verification And Bundle Check
+### Task 8: Add Folder Date Ordering And Archive Cleanup
+
+**Files:**
+- Modify: `src/lib/db/queries.ts`
+- Modify: `src/lib/dates.ts`
+- Modify: `src/features/folders/FolderDetailScreen.tsx`
+- Create: `src/features/folders/FolderArchiveScreen.tsx`
+- Create: `app/folders/[folderId]/archive.tsx`
+- Modify: `app/_layout.tsx`
+
+- [ ] **Step 1: Ensure active folder tasks are ordered by date**
+
+In `src/lib/db/queries.ts`, update `listTasksForFolder` so it excludes completed tasks and sorts by scheduled date first:
+
+```ts
+export async function listTasksForFolder(folderId: string): Promise<Task[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<TaskRow>(
+    `SELECT * FROM tasks
+     WHERE folder_id = ? AND status != 'done'
+     ORDER BY scheduled_date ASC, sequence_index ASC, created_at ASC`,
+    folderId,
+  );
+  return rows.map(rowToTask);
+}
+```
+
+This makes the active folder screen a schedule view, not an insertion-order view.
+
+- [ ] **Step 2: Add archive query helpers**
+
+In `src/lib/db/queries.ts`, add:
+
+```ts
+export async function listArchivedTasksForFolder(folderId: string): Promise<Task[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<TaskRow>(
+    `SELECT * FROM tasks
+     WHERE folder_id = ? AND status = 'done'
+     ORDER BY scheduled_date DESC, updated_at DESC`,
+    folderId,
+  );
+  return rows.map(rowToTask);
+}
+
+export async function restoreTaskToActive(taskId: string): Promise<void> {
+  await updateTaskStatus(taskId, "todo");
+}
+
+export async function deleteTasks(taskIds: string[]): Promise<void> {
+  const db = await getDatabase();
+  for (const taskId of taskIds) {
+    await db.runAsync("DELETE FROM tasks WHERE id = ?", taskId);
+  }
+}
+
+export async function deleteTask(taskId: string): Promise<void> {
+  await deleteTasks([taskId]);
+}
+```
+
+- [ ] **Step 3: Add Archive button inside folder detail**
+
+In `src/features/folders/FolderDetailScreen.tsx`, add an Archive button in the folder top controls:
+
+```tsx
+<Pressable onPress={() => router.push(`/folders/${folderId}/archive`)} style={secondaryButton}>
+  <Text style={secondaryText}>Archive</Text>
+</Pressable>
+```
+
+Keep completed tasks out of the normal folder task list by relying on the updated `listTasksForFolder`.
+
+- [ ] **Step 4: Add archive month grouping helper**
+
+In `src/lib/dates.ts`, add:
+
+```ts
+export function monthKey(dateKey: string): string {
+  return dateKey.slice(0, 7);
+}
+
+export function monthLabel(monthKeyValue: string): string {
+  const [year, month] = monthKeyValue.split("-").map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+}
+```
+
+- [ ] **Step 5: Create folder archive screen**
+
+Create `src/features/folders/FolderArchiveScreen.tsx`:
+
+```tsx
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { EmptyState } from "../../components/EmptyState";
+import { TaskRow } from "../../components/TaskRow";
+import { deleteTasks, getFolder, listArchivedTasksForFolder, restoreTaskToActive } from "../../lib/db/queries";
+import { monthKey, monthLabel } from "../../lib/dates";
+import type { Folder, Task } from "../../lib/types";
+
+export function FolderArchiveScreen() {
+  const { folderId } = useLocalSearchParams<{ folderId: string }>();
+  const [folder, setFolder] = useState<Folder | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [editing, setEditing] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+
+  const refresh = useCallback(async () => {
+    if (!folderId) return;
+    const [nextFolder, nextTasks] = await Promise.all([
+      getFolder(folderId),
+      listArchivedTasksForFolder(folderId),
+    ]);
+    setFolder(nextFolder);
+    setTasks(nextTasks);
+  }, [folderId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh]),
+  );
+
+  const grouped = useMemo(() => {
+    return tasks.reduce<Record<string, Task[]>>((acc, task) => {
+      const key = monthKey(task.scheduledDate);
+      acc[key] = [...(acc[key] ?? []), task];
+      return acc;
+    }, {});
+  }, [tasks]);
+
+  async function confirmDeleteMonth(key: string, monthTasks: Task[]) {
+    Alert.alert(
+      "Delete archived month?",
+      `Delete ${monthTasks.length} completed task${monthTasks.length === 1 ? "" : "s"} from ${monthLabel(key)}? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            await deleteTasks(monthTasks.map((task) => task.id));
+            await refresh();
+          },
+        },
+      ],
+    );
+  }
+
+  function toggleSelected(taskId: string) {
+    setSelectedTaskIds((current) =>
+      current.includes(taskId) ? current.filter((id) => id !== taskId) : [...current, taskId],
+    );
+  }
+
+  async function confirmDeleteSelected() {
+    Alert.alert(
+      "Delete selected tasks?",
+      `Delete ${selectedTaskIds.length} archived task${selectedTaskIds.length === 1 ? "" : "s"}? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            await deleteTasks(selectedTaskIds);
+            setSelectedTaskIds([]);
+            setEditing(false);
+            await refresh();
+          },
+        },
+      ],
+    );
+  }
+
+  async function confirmDeleteOne(task: Task) {
+    Alert.alert(
+      "Delete archived task?",
+      `Delete "${task.title}"? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            await deleteTasks([task.id]);
+            await refresh();
+          },
+        },
+      ],
+    );
+  }
+
+  return (
+    <ScrollView style={{ backgroundColor: "#F3F4F6", flex: 1 }}>
+      <View style={{ padding: 18, paddingTop: 24 }}>
+        <Text style={{ color: "#111827", fontSize: 32, fontWeight: "900" }}>
+          {folder ? `${folder.name} Archive` : "Archive"}
+        </Text>
+        <Text style={{ color: "#4B5563", marginTop: 4 }}>
+          Completed tasks can be restored, selected for deletion, or cleaned up by month.
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
+          <Pressable
+            onPress={() => {
+              setEditing((value) => !value);
+              setSelectedTaskIds([]);
+            }}
+            style={{ backgroundColor: "#E5E7EB", borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10 }}
+          >
+            <Text style={{ color: "#111827", fontWeight: "900" }}>{editing ? "Done" : "Edit"}</Text>
+          </Pressable>
+          {editing ? (
+            <Pressable
+              disabled={selectedTaskIds.length === 0}
+              onPress={confirmDeleteSelected}
+              style={{
+                backgroundColor: "#FEE2E2",
+                borderRadius: 8,
+                opacity: selectedTaskIds.length === 0 ? 0.45 : 1,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+              }}
+            >
+              <Text style={{ color: "#B91C1C", fontWeight: "900" }}>
+                Delete Selected
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+
+      {tasks.length === 0 ? <EmptyState title="No archived tasks" /> : null}
+      {Object.entries(grouped).map(([key, monthTasks]) => (
+        <View key={key}>
+          <View
+            style={{
+              alignItems: "center",
+              flexDirection: "row",
+              justifyContent: "space-between",
+              paddingHorizontal: 18,
+              paddingTop: 18,
+              paddingBottom: 8,
+            }}
+          >
+            <Text style={{ color: "#111827", fontSize: 18, fontWeight: "900" }}>
+              {monthLabel(key)}
+            </Text>
+            <Pressable onPress={() => confirmDeleteMonth(key, monthTasks)}>
+              <Text style={{ color: "#B91C1C", fontWeight: "900" }}>Delete Month</Text>
+            </Pressable>
+          </View>
+
+          {monthTasks.map((task) => (
+            <View key={task.id}>
+              <TaskRow
+                task={task}
+                complete
+                selected={editing && selectedTaskIds.includes(task.id)}
+                onSelect={editing ? () => toggleSelected(task.id) : undefined}
+                onToggle={async () => {
+                  await restoreTaskToActive(task.id);
+                  await refresh();
+                }}
+                onEdit={() => router.push({ pathname: "/modals/task", params: { taskId: task.id, folderId } })}
+              />
+              <View style={{ flexDirection: "row", gap: 10, marginHorizontal: 14, marginBottom: 10 }}>
+                <Pressable
+                  onPress={async () => {
+                    await restoreTaskToActive(task.id);
+                    await refresh();
+                  }}
+                  style={{ backgroundColor: "#E5E7EB", borderRadius: 8, flex: 1, padding: 12 }}
+                >
+                  <Text style={{ color: "#111827", fontWeight: "900", textAlign: "center" }}>
+                    Restore
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => confirmDeleteOne(task)}
+                  style={{ backgroundColor: "#FEE2E2", borderRadius: 8, flex: 1, padding: 12 }}
+                >
+                  <Text style={{ color: "#B91C1C", fontWeight: "900", textAlign: "center" }}>
+                    Delete
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+```
+
+- [ ] **Step 6: Add archive route**
+
+Create `app/folders/[folderId]/archive.tsx`:
+
+```tsx
+export { FolderArchiveScreen as default } from "../../../src/features/folders/FolderArchiveScreen";
+```
+
+In `app/_layout.tsx`, add:
+
+```tsx
+<Stack.Screen name="folders/[folderId]/archive" options={{ title: "Archive" }} />
+```
+
+- [ ] **Step 7: Run verification**
+
+Run:
+
+```powershell
+npm run typecheck
+npm test -- --runInBand
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Commit**
+
+```powershell
+git add app src
+git commit -m "feat: add archive cleanup controls"
+```
+
+---
+
+### Task 9: Final Verification And Bundle Check
 
 **Files:**
 - Modify only if verification reveals failures
@@ -1196,11 +1540,19 @@ Manual checks:
 8. Row Move opens Bulk Shift instead of silently moving to tomorrow.
 9. Folder page Edit toggles multi-select mode.
 10. Move Selected opens Bulk Shift.
-11. Cascade remains opt-in.
-12. Checklist items toggle individually and stay visible.
-13. Monthly recurrence appears in the recurrence picker.
-14. Monthly recurrence works for 31st -> month end.
-15. Keyboard can be dismissed by dragging/tapping outside in forms.
+11. Folder active tasks are ordered by scheduled date.
+12. Completed tasks leave the active folder list.
+13. Folder Archive shows completed tasks.
+14. Archived tasks can be restored to active.
+15. Archive groups completed tasks by month.
+16. Archive can delete one completed task after confirmation.
+17. Archive Edit mode can select and delete multiple completed tasks after confirmation.
+18. Archive can delete an entire old month after confirmation.
+19. Cascade remains opt-in.
+20. Checklist items toggle individually and stay visible.
+21. Monthly recurrence appears in the recurrence picker.
+22. Monthly recurrence works for 31st -> month end.
+23. Keyboard can be dismissed by dragging/tapping outside in forms.
 ```
 
 - [ ] **Step 5: Commit any verification fixes**
@@ -1230,5 +1582,8 @@ Spec coverage:
 - General folder prepopulated and default: Task 2.
 - Monthly recurrence with month-end fallback: Task 1.
 - Keyboard dismissal and checklist visibility while typing: Task 7.
+- Folder active task date ordering: Task 8.
+- Completed task Archive and restore flow: Task 8.
+- Archive single delete, selected bulk delete, monthly grouping, and month bulk delete: Task 8.
 
 No placeholders remain. All new behavior has either a direct unit test or a manual smoke check where UI interaction is the main risk.
