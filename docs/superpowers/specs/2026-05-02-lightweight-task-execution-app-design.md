@@ -30,17 +30,18 @@ Recommended stack:
 
 - Swift
 - SwiftUI
-- Local SQLite database using GRDB
+- SwiftData for local persistence
 - Apple `FileImporter` / document picker for CSV and PDF files
 - Native CSV parsing implemented in-app
 - PDFKit for basic PDF text extraction
 - XCTest for model and scheduling tests
+- iPhone 17 Pro as the primary device target for layout and preview testing
 
 The app stores all task, folder, recurring rule, checklist, import, and schedule-change data locally on the device. Data stays private by default because it never leaves the phone.
 
 iCloud sync, CloudKit, Firebase, Supabase, analytics, remote logging, push notifications, and user accounts are excluded from the MVP.
 
-SwiftData is intentionally not the first recommendation. It is fast for simple prototypes, but this app's most important behaviors are schedule shifts, import review, recurring instances, and undoable bulk changes. SQLite with GRDB gives more explicit control over persistence, migrations, queries, and test setup while still staying lightweight.
+SwiftData is the MVP persistence choice because the app is local-only, iPhone-first, private, and intentionally small. The scheduling, recurrence, and import logic should remain outside SwiftData model classes where practical so those behaviors can be unit tested without relying on UI flows.
 
 ## Local App Modules
 
@@ -53,7 +54,7 @@ The codebase should stay small and split around app behavior:
 - `Import`: CSV import, PDF text extraction, field mapping, review/edit table
 - `Scheduling`: date assignment, bulk move, optional cascade shift, undo last shift
 - `Recurrence`: daily, weekly, and specific-day instance generation
-- `Persistence`: SQLite schema, repositories, migrations, import/export backup
+- `Persistence`: SwiftData container setup, query helpers, model storage, import/export backup
 
 Each module should be simple enough to understand independently. Scheduling and recurrence should be mostly pure logic with XCTest coverage because those behaviors are the core of the app.
 
@@ -108,11 +109,9 @@ Path/
         ScheduleChange.swift
 
       Persistence/
-        Database.swift
-        Migrations.swift
-        FolderRepository.swift
-        TaskRepository.swift
-        ScheduleChangeRepository.swift
+        ModelContainerFactory.swift
+        TaskQueries.swift
+        BackupEnvelope.swift
 
     Shared/
       Components/
@@ -127,6 +126,8 @@ Path/
 ```
 
 The most important architectural rule is that `Scheduling`, `Recurrence`, and `Import` should not depend on SwiftUI. They should expose testable Swift types and functions that the views call through view models or services. This keeps the app fast to build while still protecting the behavior that matters most.
+
+The primary UI target is iPhone 17 Pro. The interface should be iPhone-first: navigation should use a compact native stack or tab-style shell, not a desktop-style persistent sidebar. The layout should still use SwiftUI adaptive sizing so it works on nearby iPhone sizes without special cases.
 
 ## Privacy And Backup Model
 
@@ -185,6 +186,7 @@ type Task = {
   status: "todo" | "done" | "skipped";
   checklistItems: ChecklistItem[];
   recurringRule?: RecurringRule;
+  defaultedDuration: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -208,9 +210,16 @@ type ScheduleChange = {
   newDates: Record<string, string>;
   reason: "manual-reschedule" | "cascade-shift";
 };
+
+type RecurringCompletion = {
+  id: string;
+  recurringTaskId: string;
+  completionDate: string;
+  completedAt: string;
+};
 ```
 
-This model supports sequence-based scheduling, cascading shifts, multi-folder management, manual tasks, recurring tasks, and undo for the last schedule shift without introducing dependencies, tags, priorities, accounts, or complex recurrence.
+This model supports sequence-based scheduling, cascading shifts, multi-folder management, manual tasks, recurring task templates, per-date recurring completion records, and undo for the last schedule shift without introducing dependencies, tags, priorities, accounts, or complex recurrence.
 
 ## Import Flow
 
@@ -281,7 +290,7 @@ Each task row shows:
 
 The app allows multiple tasks on one day. It does not attempt strict capacity planning in the MVP. It shows total estimated hours so the user can judge whether the day is realistic.
 
-Recurring tasks behave as templates that produce due instances in the Overview. Completing today's recurring instance does not delete the recurring template.
+Recurring tasks behave as templates that produce due instances in the Overview. Completing today's recurring instance creates or updates a `RecurringCompletion` record for that task and date. It does not delete, duplicate, or permanently modify the recurring task template.
 
 ## Falling Behind And Cascading Shifts
 
@@ -313,7 +322,7 @@ The app records the change in `ScheduleChange` so the user can undo the last sch
 
 ### Tasks Without Durations
 
-Allow import and manual creation. Display duration as unset or default to 2 hours. Missing duration is not an error.
+Allow import and manual creation. Default missing duration to 2 hours and set `defaultedDuration` to true so the review screen can visually show that the value was inferred. Missing duration is not an error.
 
 ### Tasks Spanning Multiple Days
 
