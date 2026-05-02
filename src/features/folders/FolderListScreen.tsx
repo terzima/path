@@ -20,6 +20,10 @@ export function FolderListScreen() {
   );
 
   function confirmDeleteFolder(folder: Folder) {
+    if (folder.id === "general") {
+      Alert.alert("General stays", "General is the default folder and cannot be deleted.");
+      return;
+    }
     Alert.alert(
       `Delete "${folder.name}"?`,
       "This will permanently delete the folder and all tasks inside it.",

@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import {
   chooseDefaultFolderId,
-  chooseSequenceGroup,
   getTask,
   insertChecklistItems,
   insertTask,
@@ -26,7 +25,7 @@ import {
   updateTask,
 } from "../../lib/db/queries";
 import { todayKey } from "../../lib/dates";
-import { displaySequenceGroupName } from "../../lib/sequenceGroups";
+import { displaySequenceGroupName, sequenceGroupInputValue, sequenceGroupValueFromInput } from "../../lib/sequenceGroups";
 import type { EnergyType, Folder, RecurrenceType } from "../../lib/types";
 import { recurrenceOptions } from "../recurrence/recurrenceTypes";
 import { ChecklistEditor } from "./ChecklistEditor";
@@ -97,7 +96,7 @@ export function TaskForm() {
           setDurationHours(String(task.durationHours));
           setEnergyType(task.energyType);
           setSequenceIndex(task.sequenceIndex ? String(task.sequenceIndex) : "");
-          setSequenceGroupId(task.sequenceGroupId ?? "");
+          setSequenceGroupId(sequenceGroupInputValue(task.sequenceGroupId, task.folderId ?? defaultFolderId));
           setRecurrenceType(task.recurrenceType ?? "off");
           setRecurrenceDaysOfWeek(task.recurrenceDaysOfWeek);
           setChecklistItems(taskChecklistItems.map((item) => item.text));
@@ -138,7 +137,7 @@ export function TaskForm() {
       defaultedDuration: !(Number.isFinite(parsedDuration) && parsedDuration > 0),
       energyType,
       sequenceIndex: Number.isFinite(resolvedSequenceIndex) ? resolvedSequenceIndex : null,
-      sequenceGroupId: chooseSequenceGroup(sequenceGroupId, selectedFolderId),
+      sequenceGroupId: sequenceGroupValueFromInput(sequenceGroupId, selectedFolderId),
       recurrenceType: recurrenceType === "off" ? null : recurrenceType,
       recurrenceDaysOfWeek: recurrenceType === "specific_days" ? recurrenceDaysOfWeek : [],
     };
