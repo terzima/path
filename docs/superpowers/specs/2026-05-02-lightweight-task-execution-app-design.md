@@ -24,110 +24,120 @@ The Overview supports fast completion, checklist expansion, quick rescheduling, 
 
 ## Product Architecture
 
-The MVP should be a native iOS app that can be installed directly onto the user's iPhone through their Apple Developer account. The app does not need a backend, web account, hosted database, or third-party sync service.
+The MVP should be a React Native app built with Expo so it can be developed from a Windows PC and built for iPhone through EAS Build. The app does not need a Mac for normal development, does not need a backend, and does not need accounts, hosted storage, or third-party sync.
 
 Recommended stack:
 
-- Swift
-- SwiftUI
-- SwiftData for local persistence
-- Apple `FileImporter` / document picker for CSV and PDF files
-- Native CSV parsing implemented in-app
-- PDFKit for basic PDF text extraction
-- XCTest for model and scheduling tests
+- React Native
+- Expo
+- Expo Router
+- TypeScript
+- Local SQLite using `expo-sqlite`
+- `expo-document-picker` for CSV and optional PDF file selection
+- `papaparse` for CSV parsing
+- Basic PDF import treated as secondary; CSV remains the reliable import path
+- Jest for scheduling, recurrence, cascade, CSV, and database logic tests
+- Windows PC local development
+- EAS Build for iOS builds and Apple Developer account upload
 - iPhone 17 Pro as the primary device target for layout and preview testing
 
-The app stores all task, folder, recurring rule, checklist, import, and schedule-change data locally on the device. Data stays private by default because it never leaves the phone.
+The app stores all task, folder, recurring rule, checklist, import, schedule-change, and recurring-completion data locally on the device. Data stays private by default because it never leaves the phone.
 
 iCloud sync, CloudKit, Firebase, Supabase, analytics, remote logging, push notifications, and user accounts are excluded from the MVP.
 
-SwiftData is the MVP persistence choice because the app is local-only, iPhone-first, private, and intentionally small. The scheduling, recurrence, and import logic should remain outside SwiftData model classes where practical so those behaviors can be unit tested without relying on UI flows.
+SQLite is the MVP persistence choice because Expo supports it well, it stays local/private, and it gives explicit control over schedule shifts, import review, recurring completion records, and backup export. Scheduling, recurrence, and import logic should remain outside React components so those behaviors can be unit tested without relying on UI flows.
 
 ## Local App Modules
 
 The codebase should stay small and split around app behavior:
 
-- `AppShell`: navigation, sidebar, selected folder, and top-level routes
-- `Overview`: overdue, today, upcoming, and recurring due views
-- `Folders`: folder list, folder detail, folder task table
-- `Tasks`: task form, checklist editing, completion, quick reschedule
-- `Import`: CSV import, PDF text extraction, field mapping, review/edit table
-- `Scheduling`: date assignment, bulk move, optional cascade shift, undo last shift
-- `Recurrence`: daily, weekly, and specific-day instance generation
-- `Persistence`: SwiftData container setup, query helpers, model storage, import/export backup
+- `app`: Expo Router routes and modal screens
+- `features/overview`: overdue, today, upcoming, and recurring due views
+- `features/folders`: folder list, folder detail, folder task table
+- `features/tasks`: task form, checklist editing, completion, quick reschedule
+- `features/import`: CSV import, optional PDF selection, field mapping, review/edit table
+- `features/scheduling`: date assignment, bulk move, optional cascade shift, undo last shift
+- `features/recurrence`: daily, weekly, and specific-day instance generation
+- `lib/db`: SQLite schema, migrations, query helpers, import/export backup
 
-Each module should be simple enough to understand independently. Scheduling and recurrence should be mostly pure logic with XCTest coverage because those behaviors are the core of the app.
+Each module should be simple enough to understand independently. Scheduling and recurrence should be mostly pure TypeScript logic with Jest coverage because those behaviors are the core of the app.
 
 ## Repository Architecture
 
-The repository should use a small native iOS layout that keeps SwiftUI views separate from core scheduling, recurrence, import, and persistence logic.
+The repository should use a small Expo layout that keeps React Native screens separate from core scheduling, recurrence, import, and persistence logic.
 
 ```text
 Path/
-  Path.xcodeproj
-  Path/
-    App/
-      PathApp.swift
-      AppShellView.swift
-      NavigationState.swift
+  app/
+    _layout.tsx
+    index.tsx
+    folders/
+      index.tsx
+      [folderId].tsx
+    modals/
+      task.tsx
+      folder.tsx
+      import.tsx
+      bulk-shift.tsx
 
-    Features/
-      Overview/
-        OverviewView.swift
-        OverviewViewModel.swift
+  src/
+    components/
+      EmptyState.tsx
+      SectionHeader.tsx
+      TaskRow.tsx
 
-      Folders/
-        FolderListView.swift
-        FolderDetailView.swift
-        FolderFormView.swift
+    features/
+      overview/
+        OverviewScreen.tsx
+        useOverview.ts
 
-      Tasks/
-        TaskRowView.swift
-        TaskFormView.swift
-        ChecklistEditorView.swift
+      folders/
+        FolderDetailScreen.tsx
+        FolderListScreen.tsx
 
-      Import/
-        ImportPickerView.swift
-        CSVParser.swift
-        ImportReviewView.swift
-        PDFTextExtractor.swift
+      tasks/
+        TaskForm.tsx
+        ChecklistEditor.tsx
 
-      Scheduling/
-        ScheduleEngine.swift
-        CascadeShiftService.swift
-        ScheduleChangeUndoService.swift
+      import/
+        csvParser.ts
+        importDraft.ts
+        ImportReviewScreen.tsx
+        documentImport.ts
 
-      Recurrence/
-        RecurrenceRule.swift
-        RecurrenceEngine.swift
+      scheduling/
+        scheduleEngine.ts
+        cascadeShift.ts
+        undoScheduleChange.ts
 
-    Data/
-      Models/
-        Folder.swift
-        Task.swift
-        ChecklistItem.swift
-        ScheduleChange.swift
+      recurrence/
+        recurrenceEngine.ts
+        recurrenceTypes.ts
 
-      Persistence/
-        ModelContainerFactory.swift
-        TaskQueries.swift
-        BackupEnvelope.swift
+    lib/
+      db/
+        database.ts
+        migrations.ts
+        queries.ts
+        backup.ts
+      dates.ts
+      types.ts
 
-    Shared/
-      Components/
-      Extensions/
-      DateUtils.swift
+  __tests__/
+    cascadeShift.test.ts
+    csvParser.test.ts
+    recurrenceEngine.test.ts
+    scheduleEngine.test.ts
 
-  PathTests/
-    SchedulingTests.swift
-    RecurrenceTests.swift
-    CSVImportTests.swift
-    CascadeShiftTests.swift
+  app.json
+  eas.json
+  package.json
+  tsconfig.json
 ```
 
-The most important architectural rule is that `Scheduling`, `Recurrence`, and `Import` should not depend on SwiftUI. They should expose testable Swift types and functions that the views call through view models or services. This keeps the app fast to build while still protecting the behavior that matters most.
+The most important architectural rule is that `scheduling`, `recurrence`, and `import` should not depend on React components. They should expose testable TypeScript functions that screens call through hooks or service functions. This keeps the app fast to build while still protecting the behavior that matters most.
 
-The primary UI target is iPhone 17 Pro. The interface should be iPhone-first: navigation should use a compact native stack or tab-style shell, not a desktop-style persistent sidebar. The layout should still use SwiftUI adaptive sizing so it works on nearby iPhone sizes without special cases.
+The primary UI target is iPhone 17 Pro. The interface should be iPhone-first: navigation should use Expo Router tabs/stacks, not a desktop-style persistent sidebar. The layout should still use responsive React Native sizing so it works on nearby iPhone sizes without special cases.
 
 ## Privacy And Backup Model
 
@@ -142,7 +152,7 @@ The default privacy model is local-only storage:
 
 For MVP backup, the app should support manual export and import of a local backup file. This lets the user preserve data without adding a cloud dependency.
 
-An optional later version can add iCloud Drive backup or CloudKit sync, but only if the user explicitly wants cross-device usage. It should not be required for the first iPhone-only version.
+An optional later version can add iCloud Drive backup or cloud sync, but only if the user explicitly wants cross-device usage. It should not be required for the first iPhone-only version.
 
 ### Folders
 
