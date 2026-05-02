@@ -49,6 +49,15 @@ export async function getFolder(id: string): Promise<Folder | null> {
   return row ? rowToFolder(row) : null;
 }
 
+export async function deleteFolder(folderId: string): Promise<void> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<TaskRow>("SELECT * FROM tasks WHERE folder_id = ?", folderId);
+  for (const row of rows) {
+    await deleteTask(row.id);
+  }
+  await db.runAsync("DELETE FROM folders WHERE id = ?", folderId);
+}
+
 export async function folderNameById(): Promise<Record<string, string>> {
   const folders = await listFolders();
   return Object.fromEntries(folders.map((folder) => [folder.id, folder.name]));
@@ -98,6 +107,27 @@ export async function listTasksForShift(folderId: string | null, selectedTaskIds
     return listTasksForFolder(selectedFolderId!);
   }
   return allTasks;
+}
+
+export async function listTasksInSequenceGroup(folderId: string, sequenceGroupId: string): Promise<Task[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<TaskRow>(
+    `SELECT * FROM tasks
+     WHERE folder_id = ?
+       AND (
+         (? = ? AND (sequence_group_id IS NULL OR sequence_group_id = ?))
+         OR (? != ? AND sequence_group_id = ?)
+       )
+     ORDER BY scheduled_date ASC, sequence_index ASC, created_at ASC`,
+    folderId,
+    sequenceGroupId,
+    folderId,
+    folderId,
+    sequenceGroupId,
+    folderId,
+    sequenceGroupId,
+  );
+  return rows.map(rowToTask);
 }
 
 export async function listSequenceGroupsForFolder(folderId: string): Promise<string[]> {
@@ -202,6 +232,26 @@ export async function deleteTasks(taskIds: string[]): Promise<void> {
 
 export async function deleteTask(taskId: string): Promise<void> {
   await deleteTasks([taskId]);
+}
+
+export async function deleteTasksInSequenceGroup(folderId: string, sequenceGroupId: string): Promise<number> {
+  const tasks = await listTasksInSequenceGroup(folderId, sequenceGroupId);
+  await deleteTasks(tasks.map((task) => task.id));
+  return tasks.length;
+}
+
+export async function moveSequenceGroupTasksToMain(folderId: string, sequenceGroupId: string): Promise<number> {
+  const db = await getDatabase();
+  const tasks = await listTasksInSequenceGroup(folderId, sequenceGroupId);
+  for (const task of tasks) {
+    await db.runAsync(
+      "UPDATE tasks SET sequence_group_id = ?, sequence_index = NULL, updated_at = ? WHERE id = ?",
+      folderId,
+      new Date().toISOString(),
+      task.id,
+    );
+  }
+  return tasks.length;
 }
 
 export async function insertChecklistItems(taskId: string, itemTexts: string[]): Promise<void> {

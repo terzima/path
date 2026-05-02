@@ -11,6 +11,7 @@ export function TaskRow({
   onToggle,
   onReschedule,
   onEdit,
+  onDelete,
   onSelect,
   statusNote,
   folderName,
@@ -23,6 +24,7 @@ export function TaskRow({
   onToggle: () => void;
   onReschedule?: () => void;
   onEdit?: () => void;
+  onDelete?: () => void;
   onSelect?: () => void;
   statusNote?: string;
   folderName?: string;
@@ -106,6 +108,11 @@ export function TaskRow({
           {onEdit ? (
             <Pressable onPress={onEdit} hitSlop={10}>
               <Text style={{ color: "#2563EB", fontWeight: "700" }}>Edit</Text>
+            </Pressable>
+          ) : null}
+          {onDelete ? (
+            <Pressable onPress={onDelete} hitSlop={10}>
+              <Text style={{ color: "#B91C1C", fontWeight: "700" }}>Delete</Text>
             </Pressable>
           ) : null}
         </View>

@@ -1,9 +1,9 @@
 import { Link, router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { EmptyState } from "../../components/EmptyState";
 import { exportBackup } from "../../lib/db/backup";
-import { listFolders } from "../../lib/db/queries";
+import { deleteFolder, listFolders } from "../../lib/db/queries";
 import type { Folder } from "../../lib/types";
 
 export function FolderListScreen() {
@@ -18,6 +18,24 @@ export function FolderListScreen() {
       refresh();
     }, [refresh]),
   );
+
+  function confirmDeleteFolder(folder: Folder) {
+    Alert.alert(
+      `Delete "${folder.name}"?`,
+      "This will permanently delete the folder and all tasks inside it.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            await deleteFolder(folder.id);
+            await refresh();
+          },
+        },
+      ],
+    );
+  }
 
   return (
     <ScrollView style={{ backgroundColor: "#F3F4F6", flex: 1 }}>
@@ -36,11 +54,27 @@ export function FolderListScreen() {
 
       {folders.length === 0 ? <EmptyState title="No folders yet" /> : null}
       {folders.map((folder) => (
-        <Link key={folder.id} href={`/folders/${folder.id}`} asChild>
-          <Pressable style={{ backgroundColor: "#FFFFFF", borderBottomColor: "#E5E7EB", borderBottomWidth: 1, padding: 18 }}>
-            <Text style={{ color: "#111827", fontSize: 18, fontWeight: "800" }}>{folder.name}</Text>
+        <View
+          key={folder.id}
+          style={{
+            alignItems: "center",
+            backgroundColor: "#FFFFFF",
+            borderBottomColor: "#E5E7EB",
+            borderBottomWidth: 1,
+            flexDirection: "row",
+            gap: 12,
+            padding: 18,
+          }}
+        >
+          <Link href={`/folders/${folder.id}`} asChild>
+            <Pressable style={{ flex: 1 }}>
+              <Text style={{ color: "#111827", fontSize: 18, fontWeight: "800" }}>{folder.name}</Text>
+            </Pressable>
+          </Link>
+          <Pressable onPress={() => confirmDeleteFolder(folder)} hitSlop={10}>
+            <Text style={{ color: "#B91C1C", fontWeight: "800" }}>Delete</Text>
           </Pressable>
-        </Link>
+        </View>
       ))}
     </ScrollView>
   );
