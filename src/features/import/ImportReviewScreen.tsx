@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { chooseDefaultFolderId, insertChecklistItems, insertTask, listFolders, makeTask } from "../../lib/db/queries";
 import { todayKey } from "../../lib/dates";
+import { durationInputsToHours, splitDurationHours } from "../../lib/duration";
 import { scheduleDrafts } from "../scheduling/scheduleEngine";
 import { pickCsvDrafts } from "./documentImport";
 import type { ImportDraftTask } from "./importDraft";
@@ -39,6 +40,14 @@ export function ImportReviewScreen() {
 
   function updateDraft(id: string, patch: Partial<ImportDraftTask>) {
     setDrafts((current) => current.map((draft) => (draft.id === id ? { ...draft, ...patch } : draft)));
+  }
+
+  function updateDraftDuration(id: string, hoursInput: string, minutesInput: string) {
+    const duration = durationInputsToHours(hoursInput, minutesInput);
+    updateDraft(id, {
+      durationHours: duration.durationHours,
+      defaultedDuration: duration.defaultedDuration,
+    });
   }
 
   async function save() {
@@ -96,23 +105,7 @@ export function ImportReviewScreen() {
           </Pressable>
 
           {drafts.map((draft, index) => (
-            <View key={draft.id} style={{ backgroundColor: "#FFFFFF", borderRadius: 8, gap: 8, padding: 12 }}>
-              <Text style={{ color: "#6B7280", fontWeight: "800" }}>Task {index + 1}</Text>
-              <TextInput value={draft.title} onChangeText={(title) => updateDraft(draft.id, { title })} style={inputStyle} />
-              <TextInput
-                value={draft.scheduledDate ?? ""}
-                onChangeText={(scheduledDate) => updateDraft(draft.id, { scheduledDate })}
-                placeholder="YYYY-MM-DD"
-                style={inputStyle}
-              />
-              <TextInput
-                value={String(draft.durationHours)}
-                onChangeText={(value) => updateDraft(draft.id, { durationHours: Number(value) || 2, defaultedDuration: false })}
-                keyboardType="decimal-pad"
-                style={inputStyle}
-              />
-              {draft.defaultedDuration ? <Text style={{ color: "#6B7280" }}>Defaulted to 2h</Text> : null}
-            </View>
+            <ImportDraftCard key={draft.id} draft={draft} index={index} updateDraft={updateDraft} updateDraftDuration={updateDraftDuration} />
           ))}
 
           <Pressable onPress={save} style={primaryButton}>
@@ -121,6 +114,74 @@ export function ImportReviewScreen() {
         </ScrollView>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
+  );
+}
+
+function ImportDraftCard({
+  draft,
+  index,
+  updateDraft,
+  updateDraftDuration,
+}: {
+  draft: ImportDraftTask;
+  index: number;
+  updateDraft: (id: string, patch: Partial<ImportDraftTask>) => void;
+  updateDraftDuration: (id: string, hoursInput: string, minutesInput: string) => void;
+}) {
+  const duration = splitDurationHours(draft.durationHours);
+  const [hoursInput, setHoursInput] = useState(duration.hours);
+  const [minutesInput, setMinutesInput] = useState(duration.minutes);
+
+  useEffect(() => {
+    setHoursInput(duration.hours);
+    setMinutesInput(duration.minutes);
+  }, [draft.id]);
+
+  function changeHours(hours: string) {
+    setHoursInput(hours);
+    updateDraftDuration(draft.id, hours, minutesInput);
+  }
+
+  function changeMinutes(minutes: string) {
+    setMinutesInput(minutes);
+    updateDraftDuration(draft.id, hoursInput, minutes);
+  }
+
+  return (
+    <View style={{ backgroundColor: "#FFFFFF", borderRadius: 8, gap: 8, padding: 12 }}>
+      <Text style={{ color: "#6B7280", fontWeight: "800" }}>Task {index + 1}</Text>
+      <TextInput value={draft.title} onChangeText={(title) => updateDraft(draft.id, { title })} style={inputStyle} />
+      <TextInput
+        value={draft.scheduledDate ?? ""}
+        onChangeText={(scheduledDate) => updateDraft(draft.id, { scheduledDate })}
+        placeholder="YYYY-MM-DD"
+        style={inputStyle}
+      />
+      <View style={{ gap: 8 }}>
+        <Text style={{ color: "#111827", fontWeight: "800" }}>Duration</Text>
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={{ flex: 1, gap: 6 }}>
+            <Text style={{ color: "#4B5563", fontSize: 12, fontWeight: "800" }}>Hours</Text>
+            <TextInput
+              value={hoursInput}
+              onChangeText={changeHours}
+              keyboardType="number-pad"
+              style={inputStyle}
+            />
+          </View>
+          <View style={{ flex: 1, gap: 6 }}>
+            <Text style={{ color: "#4B5563", fontSize: 12, fontWeight: "800" }}>Minutes</Text>
+            <TextInput
+              value={minutesInput}
+              onChangeText={changeMinutes}
+              keyboardType="number-pad"
+              style={inputStyle}
+            />
+          </View>
+        </View>
+      </View>
+      {draft.defaultedDuration ? <Text style={{ color: "#6B7280" }}>Defaulted to 2h</Text> : null}
+    </View>
   );
 }
 

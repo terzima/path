@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { listChecklistItems, updateChecklistItemDone } from "../lib/db/queries";
 import { formatShortDate } from "../lib/dates";
+import { formatDuration } from "../lib/duration";
 import type { ChecklistItem, Task } from "../lib/types";
 
 export function TaskRow({
@@ -75,7 +76,7 @@ export function TaskRow({
             </Text>
           ) : null}
           <Text style={{ color: "#6B7280", fontSize: 13, marginTop: 6 }}>
-            {formatShortDate(task.scheduledDate)} - {task.durationHours}h - {task.energyType}
+            {formatShortDate(task.scheduledDate)} - {formatDuration(task.durationHours)} - {task.energyType}
             {task.defaultedDuration ? " - defaulted" : ""}
             {task.sequenceIndex ? ` - #${task.sequenceIndex}` : ""}
             {sequenceGroupLabel ?? task.sequenceGroupId ? ` - ${sequenceGroupLabel ?? task.sequenceGroupId}` : ""}

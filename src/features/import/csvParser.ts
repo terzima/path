@@ -1,5 +1,6 @@
 import Papa from "papaparse";
 import { createId } from "../../lib/id";
+import { parseDurationText } from "../../lib/duration";
 import type { EnergyType } from "../../lib/types";
 import type { ImportDraftTask } from "./importDraft";
 
@@ -15,16 +16,15 @@ export function parseCsvToDrafts(csv: string): ImportDraftTask[] {
   return result.data
     .filter((row) => (row.title ?? "").trim().length > 0)
     .map((row) => {
-      const duration = Number(row.duration);
-      const hasDuration = Number.isFinite(duration) && duration > 0;
+      const duration = parseDurationText(row.duration);
       return {
         id: createId(),
         sequenceIndex: parseOptionalNumber(row.sequence),
         title: row.title!.trim(),
         description: row.description ?? "",
         scheduledDate: null,
-        durationHours: hasDuration ? duration : 2,
-        defaultedDuration: !hasDuration,
+        durationHours: duration.durationHours,
+        defaultedDuration: duration.defaultedDuration,
         energyType: parseEnergy(row.energy),
         checklistItems: (row.checklist ?? "")
           .split(";")
