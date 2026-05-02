@@ -25,6 +25,7 @@ import {
   updateTask,
 } from "../../lib/db/queries";
 import { todayKey } from "../../lib/dates";
+import { durationInputsToHours, splitDurationHours } from "../../lib/duration";
 import { displaySequenceGroupName, sequenceGroupInputValue, sequenceGroupValueFromInput } from "../../lib/sequenceGroups";
 import type { EnergyType, Folder, RecurrenceType } from "../../lib/types";
 import { recurrenceOptions } from "../recurrence/recurrenceTypes";
@@ -48,7 +49,8 @@ export function TaskForm() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [scheduledDate, setScheduledDate] = useState(todayKey());
-  const [durationHours, setDurationHours] = useState("2");
+  const [durationHourInput, setDurationHourInput] = useState("2");
+  const [durationMinuteInput, setDurationMinuteInput] = useState("");
   const [energyType, setEnergyType] = useState<EnergyType>("deep");
   const [sequenceIndex, setSequenceIndex] = useState("");
   const [sequenceGroupId, setSequenceGroupId] = useState("");
@@ -66,7 +68,8 @@ export function TaskForm() {
       setTitle("");
       setDescription("");
       setScheduledDate(todayKey());
-      setDurationHours("2");
+      setDurationHourInput("2");
+      setDurationMinuteInput("");
       setEnergyType("deep");
       setSequenceIndex("");
       setSequenceGroupId("");
@@ -93,7 +96,9 @@ export function TaskForm() {
           setTitle(task.title);
           setDescription(task.description);
           setScheduledDate(task.scheduledDate);
-          setDurationHours(String(task.durationHours));
+          const durationParts = splitDurationHours(task.durationHours);
+          setDurationHourInput(durationParts.hours);
+          setDurationMinuteInput(durationParts.minutes);
           setEnergyType(task.energyType);
           setSequenceIndex(task.sequenceIndex ? String(task.sequenceIndex) : "");
           setSequenceGroupId(sequenceGroupInputValue(task.sequenceGroupId, task.folderId ?? defaultFolderId));
@@ -125,16 +130,15 @@ export function TaskForm() {
       Alert.alert("Title required", "Give the task a short title.");
       return;
     }
-    const parsedDuration = Number(durationHours);
-    const resolvedDuration = Number.isFinite(parsedDuration) && parsedDuration > 0 ? parsedDuration : 2;
+    const duration = durationInputsToHours(durationHourInput, durationMinuteInput);
     const resolvedSequenceIndex = sequenceIndex ? Number(sequenceIndex) : null;
     const base = {
       title: trimmed,
       description,
       folderId: selectedFolderId,
       scheduledDate,
-      durationHours: resolvedDuration,
-      defaultedDuration: !(Number.isFinite(parsedDuration) && parsedDuration > 0),
+      durationHours: duration.durationHours,
+      defaultedDuration: duration.defaultedDuration,
       energyType,
       sequenceIndex: Number.isFinite(resolvedSequenceIndex) ? resolvedSequenceIndex : null,
       sequenceGroupId: sequenceGroupValueFromInput(sequenceGroupId, selectedFolderId),
@@ -183,7 +187,12 @@ export function TaskForm() {
           <ChecklistEditor items={checklistItems} onChange={setChecklistItems} />
 
           <Field label="Date" value={scheduledDate} onChangeText={setScheduledDate} placeholder="YYYY-MM-DD" />
-          <Field label="Duration hours" value={durationHours} onChangeText={setDurationHours} keyboardType="decimal-pad" />
+          <DurationFields
+            hours={durationHourInput}
+            minutes={durationMinuteInput}
+            onChangeHours={setDurationHourInput}
+            onChangeMinutes={setDurationMinuteInput}
+          />
           <Field label="Sequence index" value={sequenceIndex} onChangeText={setSequenceIndex} keyboardType="number-pad" />
           <Field label="Sequence group" value={sequenceGroupId} onChangeText={setSequenceGroupId} placeholder="Defaults to folder" />
 
@@ -268,6 +277,34 @@ function Field({
     <View style={{ gap: 6 }}>
       <Text style={{ color: "#111827", fontWeight: "800" }}>{label}</Text>
       <TextInput {...props} style={[inputStyle, props.multiline ? { minHeight: 82, textAlignVertical: "top" } : null]} />
+    </View>
+  );
+}
+
+function DurationFields({
+  hours,
+  minutes,
+  onChangeHours,
+  onChangeMinutes,
+}: {
+  hours: string;
+  minutes: string;
+  onChangeHours: (value: string) => void;
+  onChangeMinutes: (value: string) => void;
+}) {
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={{ color: "#111827", fontWeight: "800" }}>Duration</Text>
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        <View style={{ flex: 1, gap: 6 }}>
+          <Text style={{ color: "#4B5563", fontSize: 12, fontWeight: "800" }}>Hours</Text>
+          <TextInput value={hours} onChangeText={onChangeHours} keyboardType="number-pad" style={inputStyle} />
+        </View>
+        <View style={{ flex: 1, gap: 6 }}>
+          <Text style={{ color: "#4B5563", fontSize: 12, fontWeight: "800" }}>Minutes</Text>
+          <TextInput value={minutes} onChangeText={onChangeMinutes} keyboardType="number-pad" style={inputStyle} />
+        </View>
+      </View>
     </View>
   );
 }
