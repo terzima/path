@@ -38,7 +38,7 @@ export function FolderListScreen() {
   }
 
   return (
-    <ScrollView style={{ backgroundColor: "#F3F4F6", flex: 1 }}>
+    <ScrollView style={{ backgroundColor: "#F3F4F6", flex: 1 }} contentContainerStyle={{ paddingBottom: 140 }}>
       <View style={{ padding: 18, paddingTop: 24 }}>
         <Text style={{ color: "#111827", fontSize: 32, fontWeight: "900" }}>Folders</Text>
         <Text style={{ color: "#4B5563", marginTop: 4 }}>Project-specific planning and recovery.</Text>

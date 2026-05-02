@@ -60,15 +60,36 @@ export function TaskForm() {
   const isEditing = Boolean(taskId);
 
   useEffect(() => {
+    let cancelled = false;
+
+    function resetForm(defaultFolderId: string | null) {
+      setSelectedFolderId(defaultFolderId);
+      setTitle("");
+      setDescription("");
+      setScheduledDate(todayKey());
+      setDurationHours("2");
+      setEnergyType("deep");
+      setSequenceIndex("");
+      setSequenceGroupId("");
+      setRecurrenceType("off");
+      setRecurrenceDaysOfWeek([]);
+      setChecklistItems([]);
+    }
+
     async function load() {
+      setLoaded(false);
       const nextFolders = await listFolders();
+      if (cancelled) return;
       setFolders(nextFolders);
       const defaultFolderId = chooseDefaultFolderId(nextFolders, folderId ?? null);
-      setSelectedFolderId(defaultFolderId);
+      resetForm(defaultFolderId);
 
       if (taskId) {
         const task = await getTask(taskId);
+        if (cancelled) return;
         if (task) {
+          const taskChecklistItems = await listChecklistItems(task.id);
+          if (cancelled) return;
           setSelectedFolderId(task.folderId ?? defaultFolderId);
           setTitle(task.title);
           setDescription(task.description);
@@ -79,12 +100,16 @@ export function TaskForm() {
           setSequenceGroupId(task.sequenceGroupId ?? "");
           setRecurrenceType(task.recurrenceType ?? "off");
           setRecurrenceDaysOfWeek(task.recurrenceDaysOfWeek);
-          setChecklistItems((await listChecklistItems(task.id)).map((item) => item.text));
+          setChecklistItems(taskChecklistItems.map((item) => item.text));
         }
       }
       setLoaded(true);
     }
     load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [folderId, taskId]);
 
   useEffect(() => {
@@ -149,13 +174,15 @@ export function TaskForm() {
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           style={{ backgroundColor: "#F3F4F6", flex: 1 }}
-          contentContainerStyle={{ gap: 14, padding: 18, paddingBottom: 120 }}
+          contentContainerStyle={{ gap: 14, padding: 18, paddingBottom: 160 }}
         >
           <Text style={{ color: "#111827", fontSize: 30, fontWeight: "900" }}>
             {isEditing ? "Edit Task" : "Add Task"}
           </Text>
           <Field label="Title" value={title} onChangeText={setTitle} placeholder="3-hour focused block" />
           <Field label="Description" value={description} onChangeText={setDescription} placeholder="Optional notes" multiline />
+          <ChecklistEditor items={checklistItems} onChange={setChecklistItems} />
+
           <Field label="Date" value={scheduledDate} onChangeText={setScheduledDate} placeholder="YYYY-MM-DD" />
           <Field label="Duration hours" value={durationHours} onChangeText={setDurationHours} keyboardType="decimal-pad" />
           <Field label="Sequence index" value={sequenceIndex} onChangeText={setSequenceIndex} keyboardType="number-pad" />
@@ -217,8 +244,6 @@ export function TaskForm() {
               </View>
             </View>
           ) : null}
-
-          <ChecklistEditor items={checklistItems} onChange={setChecklistItems} />
 
           <Pressable onPress={save} style={saveButton}>
             <Text style={{ color: "#FFFFFF", fontWeight: "900", textAlign: "center" }}>Save Task</Text>

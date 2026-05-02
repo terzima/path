@@ -53,7 +53,7 @@ export function BulkShiftScreen() {
   }
 
   return (
-    <ScrollView style={{ backgroundColor: "#F3F4F6", flex: 1 }} contentContainerStyle={{ gap: 16, padding: 18 }}>
+    <ScrollView style={{ backgroundColor: "#F3F4F6", flex: 1 }} contentContainerStyle={{ gap: 16, padding: 18, paddingBottom: 140 }}>
       <Text style={{ color: "#111827", fontSize: 30, fontWeight: "900" }}>Bulk Shift</Text>
       <Text style={{ color: "#4B5563" }}>
         {cascade

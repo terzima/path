@@ -1,6 +1,6 @@
 import { Link, router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { EmptyState } from "../../components/EmptyState";
 import { SectionHeader } from "../../components/SectionHeader";
 import { TaskRow } from "../../components/TaskRow";
@@ -8,6 +8,7 @@ import { exportBackup } from "../../lib/db/backup";
 import {
   createRecurringCompletion,
   deleteRecurringCompletion,
+  deleteTask,
   folderNameById,
   updateTaskStatus,
 } from "../../lib/db/queries";
@@ -51,6 +52,20 @@ export function OverviewScreen() {
     router.push({ pathname: "/modals/task", params: { folderId: task.folderId ?? "", taskId: task.id } });
   }
 
+  function confirmDeleteTask(task: Task) {
+    Alert.alert(`Delete "${task.title}"?`, "This cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          await deleteTask(task.id);
+          await refresh();
+        },
+      },
+    ]);
+  }
+
   function row(task: Task, complete: boolean, statusNote?: string) {
     return (
       <TaskRow
@@ -64,12 +79,13 @@ export function OverviewScreen() {
         onToggle={() => toggleTask(task)}
         onReschedule={() => openMove(task)}
         onEdit={() => openEdit(task)}
+        onDelete={() => confirmDeleteTask(task)}
       />
     );
   }
 
   return (
-    <ScrollView style={{ backgroundColor: "#F3F4F6", flex: 1 }}>
+    <ScrollView style={{ backgroundColor: "#F3F4F6", flex: 1 }} contentContainerStyle={{ paddingBottom: 140 }}>
       <View style={{ padding: 18, paddingTop: 24 }}>
         <Text style={{ color: "#111827", fontSize: 36, fontWeight: "900" }}>Path</Text>
         <Text style={{ color: "#4B5563", fontSize: 15, marginTop: 4 }}>

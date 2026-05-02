@@ -67,7 +67,7 @@ export function FolderArchiveScreen() {
   if (!folder) return <EmptyState title="Folder not found" />;
 
   return (
-    <ScrollView style={{ backgroundColor: "#F3F4F6", flex: 1 }}>
+    <ScrollView style={{ backgroundColor: "#F3F4F6", flex: 1 }} contentContainerStyle={{ paddingBottom: 140 }}>
       <View style={{ padding: 18, paddingTop: 24 }}>
         <Text style={{ color: "#111827", fontSize: 32, fontWeight: "900" }}>{folder.name} Archive</Text>
         <Text style={{ color: "#4B5563", marginTop: 4 }}>{tasks.length} finished tasks</Text>
