@@ -1649,7 +1649,277 @@ git commit -m "feat: add archive cleanup controls"
 
 ---
 
-### Task 9: Final Verification And Bundle Check
+### Task 9: Fix Recurring Folder State And Occurrence Windows
+
+**Files:**
+- Modify: `src/features/recurrence/recurrenceEngine.ts`
+- Modify: `src/features/overview/useOverview.ts`
+- Modify: `src/features/folders/FolderDetailScreen.tsx`
+- Modify: `src/components/TaskRow.tsx`
+- Test: `__tests__/recurrenceWindow.test.ts`
+
+- [ ] **Step 1: Write recurrence window tests**
+
+Create `__tests__/recurrenceWindow.test.ts`:
+
+```ts
+import { getCurrentOccurrenceDate, isRecurringTaskOverdue } from "../src/features/recurrence/recurrenceEngine";
+import type { RecurringCompletion, Task } from "../src/lib/types";
+
+function recurringTask(recurrenceType: Task["recurrenceType"], scheduledDate: string, days: number[] = []): Task {
+  return {
+    id: `${recurrenceType}-${scheduledDate}`,
+    folderId: "general",
+    title: "Recurring",
+    description: "",
+    scheduledDate,
+    durationHours: 2,
+    defaultedDuration: false,
+    energyType: "light",
+    sequenceIndex: null,
+    sequenceGroupId: null,
+    status: "todo",
+    recurrenceType,
+    recurrenceDaysOfWeek: days,
+    createdAt: "2026-05-01T00:00:00.000Z",
+    updatedAt: "2026-05-01T00:00:00.000Z",
+  };
+}
+
+const completions: RecurringCompletion[] = [];
+
+test("daily missed recurrence does not remain overdue the next day", () => {
+  const task = recurringTask("daily", "2026-05-03");
+  expect(isRecurringTaskOverdue(task, "2026-05-04", completions)).toBe(false);
+  expect(getCurrentOccurrenceDate(task, "2026-05-04")).toBe("2026-05-04");
+});
+
+test("weekly missed recurrence stays overdue until next weekly occurrence", () => {
+  const task = recurringTask("weekly", "2026-05-04");
+  expect(isRecurringTaskOverdue(task, "2026-05-06", completions)).toBe(true);
+  expect(isRecurringTaskOverdue(task, "2026-05-11", completions)).toBe(false);
+  expect(getCurrentOccurrenceDate(task, "2026-05-11")).toBe("2026-05-11");
+});
+
+test("specific day missed recurrence expires at next selected weekday", () => {
+  const task = recurringTask("specific_days", "2026-05-04", [1, 3]);
+  expect(isRecurringTaskOverdue(task, "2026-05-05", completions)).toBe(true);
+  expect(isRecurringTaskOverdue(task, "2026-05-06", completions)).toBe(false);
+});
+
+test("monthly missed recurrence stays overdue until next monthly occurrence", () => {
+  const task = recurringTask("monthly", "2026-01-31");
+  expect(isRecurringTaskOverdue(task, "2026-02-15", completions)).toBe(true);
+  expect(isRecurringTaskOverdue(task, "2026-02-28", completions)).toBe(false);
+});
+```
+
+- [ ] **Step 2: Run recurrence window tests to verify they fail**
+
+Run:
+
+```powershell
+npm test -- --runInBand __tests__/recurrenceWindow.test.ts
+```
+
+Expected: FAIL because `getCurrentOccurrenceDate` and `isRecurringTaskOverdue` do not exist.
+
+- [ ] **Step 3: Add occurrence helpers to recurrence engine**
+
+In `src/features/recurrence/recurrenceEngine.ts`, add:
+
+```ts
+import { addDays, fromDateKey, monthlyOccurrenceDay, toDateKey, weekdayNumber } from "../../lib/dates";
+```
+
+Then add these functions:
+
+```ts
+export function getCurrentOccurrenceDate(task: Task, dateKey: string): string | null {
+  if (!task.recurrenceType || dateKey < task.scheduledDate) return null;
+
+  if (task.recurrenceType === "daily") return dateKey;
+
+  let cursor = task.scheduledDate;
+  let latest: string | null = null;
+
+  while (cursor <= dateKey) {
+    if (isOccurrenceDate(task, cursor)) latest = cursor;
+    cursor = addDays(cursor, 1);
+  }
+
+  return latest;
+}
+
+export function getNextOccurrenceDate(task: Task, afterDateKey: string): string | null {
+  if (!task.recurrenceType) return null;
+  let cursor = addDays(afterDateKey, 1);
+  for (let index = 0; index < 370; index += 1) {
+    if (cursor >= task.scheduledDate && isOccurrenceDate(task, cursor)) return cursor;
+    cursor = addDays(cursor, 1);
+  }
+  return null;
+}
+
+export function isOccurrenceDate(task: Task, dateKey: string): boolean {
+  if (!task.recurrenceType || dateKey < task.scheduledDate) return false;
+  if (task.recurrenceType === "daily") return true;
+  if (task.recurrenceType === "weekly") {
+    return weekdayNumber(task.scheduledDate) === weekdayNumber(dateKey);
+  }
+  if (task.recurrenceType === "specific_days") {
+    return task.recurrenceDaysOfWeek.includes(weekdayNumber(dateKey));
+  }
+  const date = fromDateKey(dateKey);
+  return date.getDate() === monthlyOccurrenceDay(task.scheduledDate, dateKey);
+}
+
+export function isRecurringTaskOverdue(
+  task: Task,
+  dateKey: string,
+  completions: RecurringCompletion[],
+): boolean {
+  const currentOccurrence = getCurrentOccurrenceDate(task, dateKey);
+  if (!currentOccurrence) return false;
+  if (currentOccurrence === dateKey) return false;
+  return !isRecurringTaskComplete(task, currentOccurrence, completions);
+}
+```
+
+Update `isRecurringTaskDue` to use `isOccurrenceDate`:
+
+```ts
+export function isRecurringTaskDue(
+  task: Task,
+  dateKey: string,
+  completions: RecurringCompletion[],
+): boolean {
+  if (!task.recurrenceType) return false;
+  if (!isOccurrenceDate(task, dateKey)) return false;
+  if (isRecurringTaskComplete(task, dateKey, completions)) return false;
+  return true;
+}
+```
+
+This gives daily a one-day window, while weekly/monthly/specific-days remain overdue until the next occurrence replaces the missed one.
+
+- [ ] **Step 4: Update Overview to show recurring overdue correctly**
+
+In `src/features/overview/useOverview.ts`, import:
+
+```ts
+import { isRecurringTaskDue, isRecurringTaskOverdue } from "../recurrence/recurrenceEngine";
+```
+
+Update `overdue` so it includes recurring overdue windows:
+
+```ts
+const overdue = tasks.filter((task) => {
+  if (task.recurrenceType) return isRecurringTaskOverdue(task, today, completions);
+  return task.status === "todo" && task.scheduledDate < today;
+});
+```
+
+Keep `recurringDue` based on `isRecurringTaskDue(task, today, completions)`.
+
+- [ ] **Step 5: Update folder rows to show recurring completion state**
+
+In `src/features/folders/FolderDetailScreen.tsx`, load completions:
+
+```ts
+import { listRecurringCompletions } from "../../lib/db/queries";
+import type { RecurringCompletion } from "../../lib/types";
+import { isRecurringTaskComplete, isRecurringTaskDue, isRecurringTaskOverdue } from "../recurrence/recurrenceEngine";
+import { todayKey } from "../../lib/dates";
+```
+
+Add state:
+
+```ts
+const [completions, setCompletions] = useState<RecurringCompletion[]>([]);
+const today = todayKey();
+```
+
+In `refresh`, load completions:
+
+```ts
+const [nextFolder, nextTasks, nextCompletions] = await Promise.all([
+  getFolder(folderId),
+  listTasksForFolder(folderId),
+  listRecurringCompletions(),
+]);
+setCompletions(nextCompletions);
+```
+
+When rendering `TaskRow`, compute recurring state:
+
+```tsx
+const recurringComplete = task.recurrenceType ? isRecurringTaskComplete(task, today, completions) : false;
+const recurringDue = task.recurrenceType ? isRecurringTaskDue(task, today, completions) : false;
+const recurringOverdue = task.recurrenceType ? isRecurringTaskOverdue(task, today, completions) : false;
+```
+
+Pass:
+
+```tsx
+complete={task.recurrenceType ? recurringComplete : task.status === "done"}
+statusNote={
+  task.recurrenceType
+    ? recurringComplete
+      ? "Completed today"
+      : recurringDue
+        ? "Due today"
+        : recurringOverdue
+          ? "Overdue"
+          : "Recurring template"
+    : undefined
+}
+```
+
+The folder row should no longer look like an uncompleted due-today task after today's recurring completion is recorded.
+
+- [ ] **Step 6: Add status note prop to TaskRow**
+
+In `src/components/TaskRow.tsx`, add:
+
+```ts
+statusNote?: string;
+```
+
+Render it near the metadata:
+
+```tsx
+{statusNote ? (
+  <Text style={{ color: "#059669", fontSize: 13, fontWeight: "800", marginTop: 4 }}>
+    {statusNote}
+  </Text>
+) : null}
+```
+
+Use a neutral color for `"Recurring template"` and warning color for `"Overdue"` if desired, but keep implementation simple.
+
+- [ ] **Step 7: Run recurrence verification**
+
+Run:
+
+```powershell
+npm test -- --runInBand __tests__/recurrenceWindow.test.ts
+npm test -- --runInBand __tests__/recurrenceEngine.test.ts __tests__/monthlyRecurrence.test.ts
+npm run typecheck
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Commit**
+
+```powershell
+git add src __tests__/recurrenceWindow.test.ts
+git commit -m "feat: clarify recurring occurrence state"
+```
+
+---
+
+### Task 10: Final Verification And Bundle Check
 
 **Files:**
 - Modify only if verification reveals failures
@@ -1746,6 +2016,7 @@ Spec coverage:
 - Edit button next to Move: Task 3.
 - General folder prepopulated and default: Task 2.
 - Monthly recurrence with month-end fallback: Task 1.
+- Recurring completion display and occurrence-window overdue behavior: Task 10.
 - Keyboard dismissal and checklist visibility while typing: Task 7.
 - Folder active task date ordering: Task 8.
 - Completed task Archive and restore flow: Task 8.
