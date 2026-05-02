@@ -26,6 +26,7 @@ import {
   updateTask,
 } from "../../lib/db/queries";
 import { todayKey } from "../../lib/dates";
+import { displaySequenceGroupName } from "../../lib/sequenceGroups";
 import type { EnergyType, Folder, RecurrenceType } from "../../lib/types";
 import { recurrenceOptions } from "../recurrence/recurrenceTypes";
 import { ChecklistEditor } from "./ChecklistEditor";
@@ -170,7 +171,7 @@ export function TaskForm() {
           {sequenceGroups.length > 0 ? (
             <ButtonGroup
               label="Existing sequence groups"
-              options={sequenceGroups.map((group) => ({ label: group, value: group }))}
+              options={sequenceGroups.map((group) => ({ label: displaySequenceGroupName(group, selectedFolderId), value: group }))}
               value={sequenceGroupId}
               onChange={setSequenceGroupId}
             />

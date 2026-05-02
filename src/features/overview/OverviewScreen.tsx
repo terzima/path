@@ -11,6 +11,7 @@ import {
   folderNameById,
   updateTaskStatus,
 } from "../../lib/db/queries";
+import { displaySequenceGroupName } from "../../lib/sequenceGroups";
 import type { Task } from "../../lib/types";
 import { getCurrentOccurrenceDate, isRecurringTaskComplete } from "../recurrence/recurrenceEngine";
 import { useOverview } from "./useOverview";
@@ -59,7 +60,7 @@ export function OverviewScreen() {
         statusNote={statusNote}
         showFolderName
         folderName={task.folderId ? folderNames[task.folderId] : "General"}
-        sequenceGroupLabel={task.sequenceGroupId}
+        sequenceGroupLabel={displaySequenceGroupName(task.sequenceGroupId, task.folderId)}
         onToggle={() => toggleTask(task)}
         onReschedule={() => openMove(task)}
         onEdit={() => openEdit(task)}

@@ -6,6 +6,7 @@ import { SectionHeader } from "../../components/SectionHeader";
 import { TaskRow } from "../../components/TaskRow";
 import { deleteTasks, getFolder, listArchivedTasksForFolder, restoreTaskToActive } from "../../lib/db/queries";
 import { monthKey, monthLabel } from "../../lib/dates";
+import { displaySequenceGroupName } from "../../lib/sequenceGroups";
 import type { Folder, Task } from "../../lib/types";
 
 export function FolderArchiveScreen() {
@@ -110,7 +111,7 @@ export function FolderArchiveScreen() {
                 onSelect={editMode ? () => toggleSelection(task.id) : undefined}
                 onToggle={() => (editMode ? toggleSelection(task.id) : restore(task.id))}
                 onEdit={() => router.push({ pathname: "/modals/task", params: { folderId, taskId: task.id } })}
-                sequenceGroupLabel={task.sequenceGroupId}
+                sequenceGroupLabel={displaySequenceGroupName(task.sequenceGroupId, folderId)}
                 statusNote="Archived"
               />
               <View style={{ backgroundColor: "#FFFFFF", flexDirection: "row", gap: 14, justifyContent: "flex-end", padding: 10 }}>

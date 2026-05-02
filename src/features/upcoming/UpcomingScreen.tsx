@@ -6,6 +6,7 @@ import { SectionHeader } from "../../components/SectionHeader";
 import { TaskRow } from "../../components/TaskRow";
 import { folderNameById, listTasks, updateTaskStatus } from "../../lib/db/queries";
 import { formatShortDate, todayKey } from "../../lib/dates";
+import { displaySequenceGroupName } from "../../lib/sequenceGroups";
 import type { Task } from "../../lib/types";
 
 export function UpcomingScreen() {
@@ -69,7 +70,7 @@ export function UpcomingScreen() {
               complete={false}
               showFolderName
               folderName={task.folderId ? folderNames[task.folderId] : "General"}
-              sequenceGroupLabel={task.sequenceGroupId}
+              sequenceGroupLabel={displaySequenceGroupName(task.sequenceGroupId, task.folderId)}
               onToggle={() => toggleTask(task)}
               onReschedule={() => openMove(task)}
               onEdit={() => openEdit(task)}

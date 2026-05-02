@@ -1,17 +1,22 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { EmptyState } from "../../components/EmptyState";
 import { TaskRow } from "../../components/TaskRow";
 import {
   createRecurringCompletion,
   deleteRecurringCompletion,
+  deleteTask,
+  deleteTasksInSequenceGroup,
   getFolder,
+  listTasksInSequenceGroup,
   listRecurringCompletions,
   listTasksForFolder,
+  moveSequenceGroupTasksToMain,
   updateTaskStatus,
 } from "../../lib/db/queries";
 import { todayKey } from "../../lib/dates";
+import { canDeleteSequenceGroup, displaySequenceGroupName, isTaskInSequenceGroup } from "../../lib/sequenceGroups";
 import type { Folder, RecurringCompletion, Task } from "../../lib/types";
 import {
   getCurrentOccurrenceDate,
@@ -27,6 +32,7 @@ export function FolderDetailScreen() {
   const [completions, setCompletions] = useState<RecurringCompletion[]>([]);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [editMode, setEditMode] = useState(false);
+  const [activeSequenceGroupId, setActiveSequenceGroupId] = useState<string | "all">("all");
   const today = todayKey();
 
   const refresh = useCallback(async () => {
@@ -48,6 +54,14 @@ export function FolderDetailScreen() {
   );
 
   const selectedParam = useMemo(() => selectedTaskIds.join(","), [selectedTaskIds]);
+  const sequenceGroupIds = useMemo(() => {
+    if (!folderId) return [];
+    return Array.from(new Set([folderId, ...tasks.map((task) => task.sequenceGroupId).filter((value): value is string => Boolean(value))]));
+  }, [folderId, tasks]);
+  const visibleTasks = useMemo(() => {
+    if (!folderId || activeSequenceGroupId === "all") return tasks;
+    return tasks.filter((task) => isTaskInSequenceGroup(task, activeSequenceGroupId, folderId));
+  }, [activeSequenceGroupId, folderId, tasks]);
 
   function toggleSelection(taskId: string) {
     setSelectedTaskIds((current) => (current.includes(taskId) ? current.filter((id) => id !== taskId) : [...current, taskId]));
@@ -73,6 +87,49 @@ export function FolderDetailScreen() {
 
   function openEdit(task: Task) {
     router.push({ pathname: "/modals/task", params: { folderId, taskId: task.id } });
+  }
+
+  function confirmDeleteTask(task: Task) {
+    Alert.alert(`Delete "${task.title}"?`, "This cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          await deleteTask(task.id);
+          await refresh();
+        },
+      },
+    ]);
+  }
+
+  async function confirmDeleteSequenceGroup(sequenceGroupId: string) {
+    if (!folderId || !canDeleteSequenceGroup(sequenceGroupId, folderId)) return;
+    const count = (await listTasksInSequenceGroup(folderId, sequenceGroupId)).length;
+    Alert.alert(
+      `Delete "${displaySequenceGroupName(sequenceGroupId, folderId)}"?`,
+      `${count} active task${count === 1 ? "" : "s"} are currently shown in this group. Choose what happens to tasks in this sequence group.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Move Tasks to Main",
+          onPress: async () => {
+            await moveSequenceGroupTasksToMain(folderId, sequenceGroupId);
+            setActiveSequenceGroupId("all");
+            await refresh();
+          },
+        },
+        {
+          text: "Delete Group and Tasks",
+          style: "destructive",
+          onPress: async () => {
+            await deleteTasksInSequenceGroup(folderId, sequenceGroupId);
+            setActiveSequenceGroupId("all");
+            await refresh();
+          },
+        },
+      ],
+    );
   }
 
   function statusFor(task: Task): { complete: boolean; note?: string } {
@@ -124,10 +181,33 @@ export function FolderDetailScreen() {
             </Pressable>
           ) : null}
         </View>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
+          <Pressable
+            onPress={() => setActiveSequenceGroupId("all")}
+            style={[filterChip, activeSequenceGroupId === "all" ? activeFilterChip : null]}
+          >
+            <Text style={activeSequenceGroupId === "all" ? activeFilterText : filterText}>All</Text>
+          </Pressable>
+          {sequenceGroupIds.map((groupId) => {
+            const active = activeSequenceGroupId === groupId;
+            return (
+              <View key={groupId} style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+                <Pressable onPress={() => setActiveSequenceGroupId(groupId)} style={[filterChip, active ? activeFilterChip : null]}>
+                  <Text style={active ? activeFilterText : filterText}>{displaySequenceGroupName(groupId, folderId)}</Text>
+                </Pressable>
+                {active && canDeleteSequenceGroup(groupId, folderId) ? (
+                  <Pressable onPress={() => void confirmDeleteSequenceGroup(groupId)} hitSlop={8}>
+                    <Text style={{ color: "#B91C1C", fontSize: 12, fontWeight: "800" }}>Delete</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
       </View>
 
-      {tasks.length === 0 ? <EmptyState title="No active tasks in this folder" /> : null}
-      {tasks.map((task) => {
+      {visibleTasks.length === 0 ? <EmptyState title="No active tasks in this view" /> : null}
+      {visibleTasks.map((task) => {
         const status = statusFor(task);
         return (
           <TaskRow
@@ -140,7 +220,8 @@ export function FolderDetailScreen() {
             onToggle={() => (editMode ? toggleSelection(task.id) : toggleDone(task))}
             onReschedule={() => openMove(task)}
             onEdit={() => openEdit(task)}
-            sequenceGroupLabel={task.sequenceGroupId}
+            onDelete={() => confirmDeleteTask(task)}
+            sequenceGroupLabel={displaySequenceGroupName(task.sequenceGroupId, folderId)}
           />
         );
       })}
@@ -152,3 +233,7 @@ const primaryButton = { backgroundColor: "#111827", borderRadius: 8, paddingHori
 const primaryText = { color: "#FFFFFF", fontWeight: "800" as const };
 const secondaryButton = { backgroundColor: "#E5E7EB", borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10 };
 const secondaryText = { color: "#111827", fontWeight: "800" as const };
+const filterChip = { backgroundColor: "#E5E7EB", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 };
+const activeFilterChip = { backgroundColor: "#111827" };
+const filterText = { color: "#111827", fontWeight: "800" as const };
+const activeFilterText = { color: "#FFFFFF", fontWeight: "800" as const };
