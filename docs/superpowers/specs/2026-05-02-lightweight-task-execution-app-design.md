@@ -57,6 +57,77 @@ The codebase should stay small and split around app behavior:
 
 Each module should be simple enough to understand independently. Scheduling and recurrence should be mostly pure logic with XCTest coverage because those behaviors are the core of the app.
 
+## Repository Architecture
+
+The repository should use a small native iOS layout that keeps SwiftUI views separate from core scheduling, recurrence, import, and persistence logic.
+
+```text
+Path/
+  Path.xcodeproj
+  Path/
+    App/
+      PathApp.swift
+      AppShellView.swift
+      NavigationState.swift
+
+    Features/
+      Overview/
+        OverviewView.swift
+        OverviewViewModel.swift
+
+      Folders/
+        FolderListView.swift
+        FolderDetailView.swift
+        FolderFormView.swift
+
+      Tasks/
+        TaskRowView.swift
+        TaskFormView.swift
+        ChecklistEditorView.swift
+
+      Import/
+        ImportPickerView.swift
+        CSVParser.swift
+        ImportReviewView.swift
+        PDFTextExtractor.swift
+
+      Scheduling/
+        ScheduleEngine.swift
+        CascadeShiftService.swift
+        ScheduleChangeUndoService.swift
+
+      Recurrence/
+        RecurrenceRule.swift
+        RecurrenceEngine.swift
+
+    Data/
+      Models/
+        Folder.swift
+        Task.swift
+        ChecklistItem.swift
+        ScheduleChange.swift
+
+      Persistence/
+        Database.swift
+        Migrations.swift
+        FolderRepository.swift
+        TaskRepository.swift
+        ScheduleChangeRepository.swift
+
+    Shared/
+      Components/
+      Extensions/
+      DateUtils.swift
+
+  PathTests/
+    SchedulingTests.swift
+    RecurrenceTests.swift
+    CSVImportTests.swift
+    CascadeShiftTests.swift
+```
+
+The most important architectural rule is that `Scheduling`, `Recurrence`, and `Import` should not depend on SwiftUI. They should expose testable Swift types and functions that the views call through view models or services. This keeps the app fast to build while still protecting the behavior that matters most.
+
 ## Privacy And Backup Model
 
 The default privacy model is local-only storage:
