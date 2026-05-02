@@ -22,6 +22,56 @@ The Overview is the main execution cockpit. It combines work from every folder a
 
 The Overview supports fast completion, checklist expansion, quick rescheduling, and bulk rescheduling.
 
+## Product Architecture
+
+The MVP should be a native iOS app that can be installed directly onto the user's iPhone through their Apple Developer account. The app does not need a backend, web account, hosted database, or third-party sync service.
+
+Recommended stack:
+
+- Swift
+- SwiftUI
+- Local SQLite database using GRDB
+- Apple `FileImporter` / document picker for CSV and PDF files
+- Native CSV parsing implemented in-app
+- PDFKit for basic PDF text extraction
+- XCTest for model and scheduling tests
+
+The app stores all task, folder, recurring rule, checklist, import, and schedule-change data locally on the device. Data stays private by default because it never leaves the phone.
+
+iCloud sync, CloudKit, Firebase, Supabase, analytics, remote logging, push notifications, and user accounts are excluded from the MVP.
+
+SwiftData is intentionally not the first recommendation. It is fast for simple prototypes, but this app's most important behaviors are schedule shifts, import review, recurring instances, and undoable bulk changes. SQLite with GRDB gives more explicit control over persistence, migrations, queries, and test setup while still staying lightweight.
+
+## Local App Modules
+
+The codebase should stay small and split around app behavior:
+
+- `AppShell`: navigation, sidebar, selected folder, and top-level routes
+- `Overview`: overdue, today, upcoming, and recurring due views
+- `Folders`: folder list, folder detail, folder task table
+- `Tasks`: task form, checklist editing, completion, quick reschedule
+- `Import`: CSV import, PDF text extraction, field mapping, review/edit table
+- `Scheduling`: date assignment, bulk move, optional cascade shift, undo last shift
+- `Recurrence`: daily, weekly, and specific-day instance generation
+- `Persistence`: SQLite schema, repositories, migrations, import/export backup
+
+Each module should be simple enough to understand independently. Scheduling and recurrence should be mostly pure logic with XCTest coverage because those behaviors are the core of the app.
+
+## Privacy And Backup Model
+
+The default privacy model is local-only storage:
+
+- No login
+- No hosted backend
+- No telemetry
+- No third-party analytics
+- No remote logs
+- No automatic sync
+
+For MVP backup, the app should support manual export and import of a local backup file. This lets the user preserve data without adding a cloud dependency.
+
+An optional later version can add iCloud Drive backup or CloudKit sync, but only if the user explicitly wants cross-device usage. It should not be required for the first iPhone-only version.
+
 ### Folders
 
 Folders are the user-facing name for project containers. Internally they can be stored as projects.
