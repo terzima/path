@@ -5,10 +5,10 @@
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
-    "web": "expo start --web"
-    ,"test": "jest"
-    ,"test:watch": "jest --watch"
-    ,"typecheck": "tsc --noEmit"
+    "web": "expo start --web",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "expo": "~54.0.33",
@@ -36,6 +36,12 @@
   },
   "private": true,
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "modulePathIgnorePatterns": [
+      "<rootDir>/.worktrees/"
+    ],
+    "testPathIgnorePatterns": [
+      "<rootDir>/.worktrees/"
+    ]
   }
 }
