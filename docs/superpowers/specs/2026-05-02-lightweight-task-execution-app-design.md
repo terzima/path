@@ -406,23 +406,23 @@ Allow it. The app shows total hours but does not prevent stacking.
 
 ## Fastest Path To MVP
 
-### Day 1
+### Task 1
 
 Build the local data model, folder/task CRUD, and Overview page.
 
-### Day 2
+### Task 2
 
 Build CSV import and the review/edit table.
 
-### Day 3
+### Task 3
 
 Build bulk reschedule, optional cascade shift, and undo last shift.
 
-### Day 4
+### Task 4
 
 Add recurring tasks and folder-specific views.
 
-### Day 5
+### Task 5
 
 Use the app on a real Rolo plan and fix only the friction that appears in real usage.
 
