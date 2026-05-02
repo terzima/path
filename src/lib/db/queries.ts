@@ -226,6 +226,8 @@ export async function restoreTaskToActive(taskId: string): Promise<void> {
 export async function deleteTasks(taskIds: string[]): Promise<void> {
   const db = await getDatabase();
   for (const taskId of taskIds) {
+    await db.runAsync("DELETE FROM checklist_items WHERE task_id = ?", taskId);
+    await db.runAsync("DELETE FROM recurring_completions WHERE recurring_task_id = ?", taskId);
     await db.runAsync("DELETE FROM tasks WHERE id = ?", taskId);
   }
 }

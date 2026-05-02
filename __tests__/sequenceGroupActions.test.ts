@@ -3,6 +3,8 @@ import {
   displaySequenceGroupName,
   isTaskInSequenceGroup,
   normalizeSequenceGroupAfterMoveToMain,
+  sequenceGroupInputValue,
+  sequenceGroupValueFromInput,
 } from "../src/lib/sequenceGroups";
 import type { Task } from "../src/lib/types";
 
@@ -55,4 +57,15 @@ test("moving a deleted group to main removes sequence index", () => {
 test("main cannot be deleted and custom groups can", () => {
   expect(canDeleteSequenceGroup("rolo", "rolo")).toBe(false);
   expect(canDeleteSequenceGroup("backend", "rolo")).toBe(true);
+});
+
+test("sequence group input shows Main for folder default", () => {
+  expect(sequenceGroupInputValue("rolo", "rolo")).toBe("Main");
+  expect(sequenceGroupInputValue(null, "rolo")).toBe("Main");
+});
+
+test("sequence group input save maps Main or blank to folder id", () => {
+  expect(sequenceGroupValueFromInput("Main", "rolo")).toBe("rolo");
+  expect(sequenceGroupValueFromInput("", "rolo")).toBe("rolo");
+  expect(sequenceGroupValueFromInput("backend", "rolo")).toBe("backend");
 });

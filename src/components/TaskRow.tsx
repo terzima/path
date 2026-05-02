@@ -70,7 +70,7 @@ export function TaskRow({
           </Pressable>
           {statusNote ? <Text style={{ color: "#2563EB", fontSize: 12, fontWeight: "800", marginTop: 4 }}>{statusNote}</Text> : null}
           {task.description ? (
-            <Text style={{ color: "#4B5563", marginTop: 4 }} numberOfLines={2}>
+            <Text style={{ color: "#4B5563", marginTop: 4 }}>
               {task.description}
             </Text>
           ) : null}
