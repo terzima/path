@@ -61,4 +61,10 @@ export async function migrate() {
     INSERT OR IGNORE INTO folders (id, name, color_hex, created_at)
     VALUES ('general', 'General', '#3B82F6', '2026-05-02T00:00:00.000Z');
   `);
+
+  const taskColumns = await db.getAllAsync<{ name: string }>("PRAGMA table_info(tasks)");
+  if (!taskColumns.some((column) => column.name === "external_id")) {
+    await db.execAsync("ALTER TABLE tasks ADD COLUMN external_id TEXT;");
+  }
+  await db.execAsync("CREATE INDEX IF NOT EXISTS idx_tasks_external_id ON tasks(external_id);");
 }

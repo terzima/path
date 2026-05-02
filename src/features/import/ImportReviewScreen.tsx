@@ -12,7 +12,18 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { chooseDefaultFolderId, insertChecklistItems, insertTask, listFolders, makeTask } from "../../lib/db/queries";
+import {
+  chooseDefaultFolderId,
+  deleteTask,
+  getTaskByExternalId,
+  insertChecklistItems,
+  insertTask,
+  listFolders,
+  makeTask,
+  replaceChecklistItems,
+  updateTask,
+  updateTaskStatus,
+} from "../../lib/db/queries";
 import { todayKey } from "../../lib/dates";
 import { durationInputsToHours, splitDurationHours } from "../../lib/duration";
 import { scheduleDrafts } from "../scheduling/scheduleEngine";
@@ -55,8 +66,28 @@ export function ImportReviewScreen() {
       Alert.alert("No tasks", "Choose a CSV first.");
       return;
     }
+    let skippedActions = 0;
     for (const draft of drafts) {
-      const task = makeTask({
+      if (draft.action === "delete" || draft.action === "archive") {
+        if (!draft.externalId) {
+          skippedActions += 1;
+          continue;
+        }
+        const existing = await getTaskByExternalId(draft.externalId);
+        if (!existing) {
+          skippedActions += 1;
+          continue;
+        }
+        if (draft.action === "delete") {
+          await deleteTask(existing.id);
+        } else {
+          await updateTaskStatus(existing.id, "done");
+        }
+        continue;
+      }
+
+      const taskInput = {
+        externalId: draft.externalId,
         title: draft.title,
         description: draft.description,
         folderId: resolvedFolderId,
@@ -66,9 +97,25 @@ export function ImportReviewScreen() {
         energyType: draft.energyType,
         sequenceIndex: draft.sequenceIndex,
         sequenceGroupId: draft.sequenceGroupId ?? resolvedFolderId,
-      });
-      await insertTask(task);
-      await insertChecklistItems(task.id, draft.checklistItems);
+      };
+
+      const existing = draft.externalId ? await getTaskByExternalId(draft.externalId) : null;
+      if (existing) {
+        await updateTask({ ...existing, ...taskInput });
+        await replaceChecklistItems(existing.id, draft.checklistItems);
+      } else {
+        const task = makeTask(taskInput);
+        await insertTask(task);
+        await insertChecklistItems(task.id, draft.checklistItems);
+      }
+    }
+    if (skippedActions > 0) {
+      Alert.alert(
+        "Import complete",
+        `${skippedActions} delete/archive action${skippedActions === 1 ? "" : "s"} could not find a matching externalId.`,
+        [{ text: "OK", onPress: () => router.back() }],
+      );
+      return;
     }
     router.back();
   }
@@ -150,6 +197,9 @@ function ImportDraftCard({
   return (
     <View style={{ backgroundColor: "#FFFFFF", borderRadius: 8, gap: 8, padding: 12 }}>
       <Text style={{ color: "#6B7280", fontWeight: "800" }}>Task {index + 1}</Text>
+      {draft.action !== "upsert" ? (
+        <Text style={{ color: "#B91C1C", fontWeight: "800" }}>{draft.action === "delete" ? "Delete" : "Archive"} by externalId</Text>
+      ) : null}
       <TextInput value={draft.title} onChangeText={(title) => updateDraft(draft.id, { title })} style={inputStyle} />
       <TextInput
         value={draft.scheduledDate ?? ""}

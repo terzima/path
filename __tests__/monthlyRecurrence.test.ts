@@ -4,6 +4,7 @@ import type { Task } from "../src/lib/types";
 function monthlyTask(anchorDate: string): Task {
   return {
     id: "monthly",
+    externalId: null,
     folderId: "general",
     title: "Monthly review",
     description: "",

@@ -4,6 +4,7 @@ import type { RecurringCompletion, Task } from "../src/lib/types";
 function recurringTask(recurrenceType: Task["recurrenceType"], scheduledDate: string, days: number[] = []): Task {
   return {
     id: `${recurrenceType}-${scheduledDate}`,
+    externalId: null,
     folderId: "general",
     title: "Recurring",
     description: "",

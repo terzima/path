@@ -75,6 +75,12 @@ export async function getTask(taskId: string): Promise<Task | null> {
   return row ? rowToTask(row) : null;
 }
 
+export async function getTaskByExternalId(externalId: string): Promise<Task | null> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<TaskRow>("SELECT * FROM tasks WHERE external_id = ? LIMIT 1", externalId);
+  return row ? rowToTask(row) : null;
+}
+
 export async function listTasksForFolder(folderId: string): Promise<Task[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<TaskRow>(
@@ -139,11 +145,12 @@ export async function insertTask(task: Task): Promise<void> {
   const db = await getDatabase();
   await db.runAsync(
     `INSERT INTO tasks (
-      id, folder_id, title, description, scheduled_date, duration_hours, defaulted_duration,
+      id, external_id, folder_id, title, description, scheduled_date, duration_hours, defaulted_duration,
       energy_type, sequence_index, sequence_group_id, status, recurrence_type,
       recurrence_days_of_week, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     task.id,
+    task.externalId,
     task.folderId,
     task.title,
     task.description,
@@ -169,6 +176,7 @@ export async function updateTask(task: Task): Promise<void> {
   const db = await getDatabase();
   await db.runAsync(
     `UPDATE tasks SET
+      external_id = ?,
       folder_id = ?,
       title = ?,
       description = ?,
@@ -183,6 +191,7 @@ export async function updateTask(task: Task): Promise<void> {
       recurrence_days_of_week = ?,
       updated_at = ?
      WHERE id = ?`,
+    task.externalId,
     task.folderId,
     task.title,
     task.description,
@@ -350,6 +359,7 @@ export function makeTask(input: Partial<Task> & Pick<Task, "title">): Task {
   const now = new Date().toISOString();
   return {
     id: createId(),
+    externalId: input.externalId ?? null,
     folderId: input.folderId ?? null,
     title: input.title,
     description: input.description ?? "",
@@ -379,6 +389,7 @@ function rowToFolder(row: FolderRow): Folder {
 function rowToTask(row: TaskRow): Task {
   return {
     id: row.id,
+    externalId: row.external_id,
     folderId: row.folder_id,
     title: row.title,
     description: row.description,
@@ -450,6 +461,7 @@ type FolderRow = {
 
 type TaskRow = {
   id: string;
+  external_id: string | null;
   folder_id: string | null;
   title: string;
   description: string;

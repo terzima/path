@@ -4,6 +4,7 @@ import type { Task } from "../src/lib/types";
 function task(sequenceGroupId: string | null): Task {
   return {
     id: sequenceGroupId ?? "empty",
+    externalId: null,
     folderId: "rolo",
     title: "Task",
     description: "",

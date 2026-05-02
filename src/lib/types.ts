@@ -20,6 +20,7 @@ export type ChecklistItem = {
 
 export type Task = {
   id: string;
+  externalId: string | null;
   folderId: string | null;
   title: string;
   description: string;

@@ -3,6 +3,7 @@ import type { Task } from "../src/lib/types";
 
 const baseTask: Task = {
   id: "prayer",
+  externalId: null,
   folderId: null,
   title: "Prayer",
   description: "",
