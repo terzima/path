@@ -29,6 +29,11 @@ Implement these product decisions:
 - Task rows also show an `Edit` action.
 - Existing tasks are fully editable through the task form.
 - App creates a built-in `General` folder and defaults new/imported tasks to it.
+- Sequence group defaults to the selected folder when left blank.
+- When a custom sequence group is typed, the task uses that group.
+- When selecting a folder in Add/Edit Task, existing sequence groups from that folder are available as selectable chips.
+- Editing a task prepopulates its existing sequence group.
+- Task rows display sequence group context when present.
 - Checklist items can be checked independently and remain visible with strikethrough until the parent task is complete.
 - Forms dismiss the keyboard on drag/tap outside and keep lower checklist fields visible above the keyboard.
 - Recurrence supports `monthly`, using the same day-of-month when possible and the last day of the month otherwise.
@@ -59,6 +64,7 @@ Do not add accounts, sync, notifications, calendar integration, or polished PDF 
 - Create: `__tests__/monthlyRecurrence.test.ts`
 - Create: `__tests__/generalFolder.test.ts`
 - Create: `__tests__/checklistQueries.test.ts`
+- Create: `__tests__/sequenceGroup.test.ts`
 
 ---
 
@@ -386,8 +392,90 @@ git commit -m "feat: default tasks to General folder"
 - Modify: `src/components/TaskRow.tsx`
 - Modify: `src/features/overview/OverviewScreen.tsx`
 - Modify: `src/features/folders/FolderDetailScreen.tsx`
+- Test: `__tests__/sequenceGroup.test.ts`
 
-- [ ] **Step 1: Add task lookup and update helpers**
+- [ ] **Step 1: Write sequence group defaulting tests**
+
+Create `__tests__/sequenceGroup.test.ts`:
+
+```ts
+import { chooseSequenceGroup, uniqueSequenceGroups } from "../src/lib/db/queries";
+import type { Task } from "../src/lib/types";
+
+function task(sequenceGroupId: string | null): Task {
+  return {
+    id: sequenceGroupId ?? "empty",
+    folderId: "rolo",
+    title: "Task",
+    description: "",
+    scheduledDate: "2026-05-03",
+    durationHours: 2,
+    defaultedDuration: false,
+    energyType: "deep",
+    sequenceIndex: null,
+    sequenceGroupId,
+    status: "todo",
+    recurrenceType: null,
+    recurrenceDaysOfWeek: [],
+    createdAt: "2026-05-03T00:00:00.000Z",
+    updatedAt: "2026-05-03T00:00:00.000Z",
+  };
+}
+
+test("sequence group defaults to selected folder when blank", () => {
+  expect(chooseSequenceGroup("", "rolo")).toBe("rolo");
+});
+
+test("sequence group uses typed custom group when present", () => {
+  expect(chooseSequenceGroup("Phase 2", "rolo")).toBe("Phase 2");
+});
+
+test("unique sequence groups are extracted from folder tasks", () => {
+  expect(uniqueSequenceGroups([task("rolo"), task("Phase 2"), task("Phase 2"), task(null)])).toEqual([
+    "Phase 2",
+    "rolo",
+  ]);
+});
+```
+
+- [ ] **Step 2: Run sequence group tests to verify they fail**
+
+Run:
+
+```powershell
+npm test -- --runInBand __tests__/sequenceGroup.test.ts
+```
+
+Expected: FAIL because `chooseSequenceGroup` and `uniqueSequenceGroups` do not exist.
+
+- [ ] **Step 3: Add sequence group helpers**
+
+In `src/lib/db/queries.ts`, add:
+
+```ts
+export function chooseSequenceGroup(input: string, selectedFolderId: string | null): string | null {
+  const trimmed = input.trim();
+  if (trimmed) return trimmed;
+  return selectedFolderId;
+}
+
+export function uniqueSequenceGroups(tasks: Task[]): string[] {
+  return Array.from(
+    new Set(
+      tasks
+        .map((task) => task.sequenceGroupId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+}
+
+export async function listSequenceGroupsForFolder(folderId: string): Promise<string[]> {
+  const tasks = await listTasksForFolder(folderId);
+  return uniqueSequenceGroups(tasks);
+}
+```
+
+- [ ] **Step 4: Add task lookup and update helpers**
 
 In `src/lib/db/queries.ts`, add:
 
@@ -440,7 +528,7 @@ export async function replaceChecklistItems(taskId: string, itemTexts: string[])
 }
 ```
 
-- [ ] **Step 2: Convert TaskForm into create/edit mode**
+- [ ] **Step 5: Convert TaskForm into create/edit mode**
 
 In `src/features/tasks/TaskForm.tsx`, read `taskId`:
 
@@ -458,8 +546,10 @@ import {
   insertTask,
   listChecklistItems,
   listFolders,
+  listSequenceGroupsForFolder,
   makeTask,
   replaceChecklistItems,
+  chooseSequenceGroup,
   updateTask,
 } from "../../lib/db/queries";
 ```
@@ -489,6 +579,24 @@ useEffect(() => {
 }, [taskId]);
 ```
 
+Add state for selectable sequence groups:
+
+```ts
+const [sequenceGroupOptions, setSequenceGroupOptions] = useState<string[]>([]);
+```
+
+Add an effect that refreshes selectable sequence groups whenever the selected folder changes:
+
+```ts
+useEffect(() => {
+  if (!selectedFolderId) {
+    setSequenceGroupOptions([]);
+    return;
+  }
+  listSequenceGroupsForFolder(selectedFolderId).then(setSequenceGroupOptions);
+}, [selectedFolderId]);
+```
+
 In `save()`, branch:
 
 ```ts
@@ -505,7 +613,7 @@ if (taskId) {
     defaultedDuration: !(Number.isFinite(parsedDuration) && parsedDuration > 0),
     energyType,
     sequenceIndex: sequenceIndex ? Number(sequenceIndex) : null,
-    sequenceGroupId: sequenceGroupId.trim() || selectedFolderId,
+    sequenceGroupId: chooseSequenceGroup(sequenceGroupId, selectedFolderId),
     recurrenceType: recurrenceType === "off" ? null : recurrenceType,
     recurrenceDaysOfWeek: recurrenceType === "specific_days" ? recurrenceDaysOfWeek : [],
   });
@@ -516,6 +624,33 @@ if (taskId) {
 ```
 
 Keep the existing create path after that branch.
+
+In the create path, also replace:
+
+```ts
+sequenceGroupId: sequenceGroupId.trim() || selectedFolderId,
+```
+
+with:
+
+```ts
+sequenceGroupId: chooseSequenceGroup(sequenceGroupId, selectedFolderId),
+```
+
+Below the `Sequence group` text field, render selectable existing groups:
+
+```tsx
+{sequenceGroupOptions.length > 0 ? (
+  <ButtonGroup
+    label="Existing sequence groups"
+    options={sequenceGroupOptions.map((group) => ({ label: group, value: group }))}
+    value={sequenceGroupId}
+    onChange={setSequenceGroupId}
+  />
+) : null}
+```
+
+This keeps the field free-form for new sequence groups while making existing folder groups easy to reuse. Editing an existing task already prepopulates its current sequence group through `setSequenceGroupId(task.sequenceGroupId ?? "")`.
 
 Update title text:
 
@@ -529,12 +664,19 @@ Update save button:
 <Text style={{ color: "#FFFFFF", fontWeight: "900", textAlign: "center" }}>{taskId ? "Save Changes" : "Save Task"}</Text>
 ```
 
-- [ ] **Step 3: Add Edit button to task rows**
+- [ ] **Step 6: Add Edit button and sequence group display to task rows**
 
 In `src/components/TaskRow.tsx`, add prop:
 
 ```ts
 onEdit?: () => void;
+sequenceGroupLabel?: string | null;
+```
+
+Inside `TaskRow`, compute:
+
+```ts
+const visibleSequenceGroup = sequenceGroupLabel ?? task.sequenceGroupId;
 ```
 
 Render next to Move:
@@ -549,7 +691,13 @@ Render next to Move:
 
 Keep `Move` as a separate adjacent action.
 
-- [ ] **Step 4: Wire Edit from Overview and Folder pages**
+In the task metadata line, append the sequence group when present:
+
+```tsx
+{visibleSequenceGroup ? ` - ${visibleSequenceGroup}` : ""}
+```
+
+- [ ] **Step 7: Wire Edit from Overview and Folder pages**
 
 In `OverviewScreen.tsx`, pass:
 
@@ -559,27 +707,44 @@ onEdit={() => router.push({ pathname: "/modals/task", params: { taskId: task.id 
 
 to every `TaskRow`.
 
+Also pass:
+
+```tsx
+sequenceGroupLabel={task.sequenceGroupId}
+```
+
+so Overview rows show folder context and sequence context.
+
 In `FolderDetailScreen.tsx`, pass:
 
 ```tsx
 onEdit={() => router.push({ pathname: "/modals/task", params: { taskId: task.id, folderId } })}
 ```
 
-- [ ] **Step 5: Run verification**
+Also pass:
+
+```tsx
+sequenceGroupLabel={task.sequenceGroupId}
+```
+
+Folder detail does not need to repeat the folder name, but it should show the sequence group because that explains what cascade will affect.
+
+- [ ] **Step 8: Run verification**
 
 Run:
 
 ```powershell
 npm run typecheck
+npm test -- --runInBand __tests__/sequenceGroup.test.ts
 npm test -- --runInBand
 ```
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 9: Commit**
 
 ```powershell
-git add src/lib/db/queries.ts src/features/tasks/TaskForm.tsx src/components/TaskRow.tsx src/features/overview/OverviewScreen.tsx src/features/folders/FolderDetailScreen.tsx
+git add src/lib/db/queries.ts src/features/tasks/TaskForm.tsx src/components/TaskRow.tsx src/features/overview/OverviewScreen.tsx src/features/folders/FolderDetailScreen.tsx __tests__/sequenceGroup.test.ts
 git commit -m "feat: edit existing tasks"
 ```
 
