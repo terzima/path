@@ -1,0 +1,12 @@
+sequence,title,description,duration,energy,checklist,sequenceGroupId
+1,Main deep work block,Default sequence group with a normal 2 hour deep-work task,2,deep,Open project; Review plan; Start implementation,
+2,Main light follow-up,Blank sequenceGroupId should import into the folder default Main group,1.5,light,Reply to messages; Clean notes,
+3,Backend implementation,Custom backend sequence group with checklist items,3,deep,Create API shape; Implement storage; Test save path,backend
+4,Backend admin pass,Same custom backend sequence group with admin energy,1,admin,Review logs; Update task list,backend
+5,Frontend polish,Custom frontend sequence group with a decimal duration,2.5,light,Check spacing; Confirm empty states; Review buttons,frontend
+6,Missing duration default,Blank duration should default to 2 hours,,deep,Confirm default duration; Import review should show defaulted,general
+7,Invalid duration default,Invalid duration should also default to 2 hours,abc,admin,Check defaulting behavior; Fix during review if needed,ops
+8,Unknown energy default,Unknown energy should fall back to deep,2,creative,Energy should become deep; Confirm after import,qa
+,No sequence task,Blank sequence should still import as an unsorted dated task,1,light,No sequence index; Still scheduled by import order,misc
+10,No checklist task,Checklist can be blank and the task should still import,2,deep,,misc
+11,"Comma title, quoted","Descriptions can include commas when quoted, like this one",2,admin,"Checklist item with comma, quoted; Second checklist item",qa
