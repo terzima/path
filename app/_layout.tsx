@@ -21,8 +21,10 @@ export default function RootLayout() {
   return (
     <Stack>
       <Stack.Screen name="index" options={{ title: "Overview" }} />
+      <Stack.Screen name="upcoming" options={{ title: "Upcoming" }} />
       <Stack.Screen name="folders/index" options={{ title: "Folders" }} />
       <Stack.Screen name="folders/[folderId]" options={{ title: "Folder" }} />
+      <Stack.Screen name="folders/[folderId]/archive" options={{ title: "Archive" }} />
       <Stack.Screen name="modals/task" options={{ presentation: "modal", title: "Task" }} />
       <Stack.Screen name="modals/folder" options={{ presentation: "modal", title: "Folder" }} />
       <Stack.Screen name="modals/import" options={{ presentation: "modal", title: "Import" }} />

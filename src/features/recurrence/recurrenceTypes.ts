@@ -5,4 +5,5 @@ export const recurrenceOptions: Array<{ label: string; value: RecurrenceType | "
   { label: "Daily", value: "daily" },
   { label: "Weekly", value: "weekly" },
   { label: "Specific days", value: "specific_days" },
+  { label: "Monthly", value: "monthly" },
 ];

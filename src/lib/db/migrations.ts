@@ -57,5 +57,8 @@ export async function migrate() {
       new_dates TEXT NOT NULL,
       reason TEXT NOT NULL
     );
+
+    INSERT OR IGNORE INTO folders (id, name, color_hex, created_at)
+    VALUES ('general', 'General', '#3B82F6', '2026-05-02T00:00:00.000Z');
   `);
 }

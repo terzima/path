@@ -1,3 +1,4 @@
+import { todayKey } from "../dates";
 import { createId } from "../id";
 import type {
   ChecklistItem,
@@ -9,7 +10,13 @@ import type {
   Task,
   TaskStatus,
 } from "../types";
-import { todayKey } from "../dates";
+export {
+  chooseDefaultFolderId,
+  chooseSequenceGroup,
+  toggleChecklistDoneValue,
+  uniqueSequenceGroups,
+} from "../taskHelpers";
+import { toggleChecklistDoneValue, uniqueSequenceGroups } from "../taskHelpers";
 import { getDatabase } from "./database";
 
 export async function createFolder(name: string): Promise<Folder> {
@@ -42,19 +49,60 @@ export async function getFolder(id: string): Promise<Folder | null> {
   return row ? rowToFolder(row) : null;
 }
 
+export async function folderNameById(): Promise<Record<string, string>> {
+  const folders = await listFolders();
+  return Object.fromEntries(folders.map((folder) => [folder.id, folder.name]));
+}
+
 export async function listTasks(): Promise<Task[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<TaskRow>("SELECT * FROM tasks ORDER BY scheduled_date ASC, sequence_index ASC");
   return rows.map(rowToTask);
 }
 
+export async function getTask(taskId: string): Promise<Task | null> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<TaskRow>("SELECT * FROM tasks WHERE id = ?", taskId);
+  return row ? rowToTask(row) : null;
+}
+
 export async function listTasksForFolder(folderId: string): Promise<Task[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<TaskRow>(
-    "SELECT * FROM tasks WHERE folder_id = ? ORDER BY sequence_index ASC, scheduled_date ASC",
+    `SELECT * FROM tasks
+     WHERE folder_id = ? AND status != 'done'
+     ORDER BY scheduled_date ASC, sequence_index ASC, created_at ASC`,
     folderId,
   );
   return rows.map(rowToTask);
+}
+
+export async function listArchivedTasksForFolder(folderId: string): Promise<Task[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<TaskRow>(
+    `SELECT * FROM tasks
+     WHERE folder_id = ? AND status = 'done'
+     ORDER BY scheduled_date DESC, updated_at DESC`,
+    folderId,
+  );
+  return rows.map(rowToTask);
+}
+
+export async function listTasksForShift(folderId: string | null, selectedTaskIds: string[]): Promise<Task[]> {
+  if (folderId) return listTasksForFolder(folderId);
+  const allTasks = await listTasks();
+  const selected = allTasks.filter((task) => selectedTaskIds.includes(task.id));
+  const selectedFolderIds = new Set(selected.map((task) => task.folderId).filter(Boolean));
+  if (selectedFolderIds.size === 1) {
+    const [selectedFolderId] = Array.from(selectedFolderIds);
+    return listTasksForFolder(selectedFolderId!);
+  }
+  return allTasks;
+}
+
+export async function listSequenceGroupsForFolder(folderId: string): Promise<string[]> {
+  const tasks = await listTasksForFolder(folderId);
+  return uniqueSequenceGroups(tasks);
 }
 
 export async function insertTask(task: Task): Promise<void> {
@@ -84,9 +132,42 @@ export async function insertTask(task: Task): Promise<void> {
 }
 
 export async function insertTasks(tasks: Task[]): Promise<void> {
-  for (const task of tasks) {
-    await insertTask(task);
-  }
+  for (const task of tasks) await insertTask(task);
+}
+
+export async function updateTask(task: Task): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE tasks SET
+      folder_id = ?,
+      title = ?,
+      description = ?,
+      scheduled_date = ?,
+      duration_hours = ?,
+      defaulted_duration = ?,
+      energy_type = ?,
+      sequence_index = ?,
+      sequence_group_id = ?,
+      status = ?,
+      recurrence_type = ?,
+      recurrence_days_of_week = ?,
+      updated_at = ?
+     WHERE id = ?`,
+    task.folderId,
+    task.title,
+    task.description,
+    task.scheduledDate,
+    task.durationHours,
+    task.defaultedDuration ? 1 : 0,
+    task.energyType,
+    task.sequenceIndex,
+    task.sequenceGroupId,
+    task.status,
+    task.recurrenceType,
+    JSON.stringify(task.recurrenceDaysOfWeek),
+    new Date().toISOString(),
+    task.id,
+  );
 }
 
 export async function updateTaskStatus(taskId: string, status: TaskStatus): Promise<void> {
@@ -105,9 +186,22 @@ export async function updateTaskDate(taskId: string, scheduledDate: string): Pro
 }
 
 export async function updateTaskDates(tasks: Task[]): Promise<void> {
-  for (const task of tasks) {
-    await updateTaskDate(task.id, task.scheduledDate);
+  for (const task of tasks) await updateTaskDate(task.id, task.scheduledDate);
+}
+
+export async function restoreTaskToActive(taskId: string): Promise<void> {
+  await updateTaskStatus(taskId, "todo");
+}
+
+export async function deleteTasks(taskIds: string[]): Promise<void> {
+  const db = await getDatabase();
+  for (const taskId of taskIds) {
+    await db.runAsync("DELETE FROM tasks WHERE id = ?", taskId);
   }
+}
+
+export async function deleteTask(taskId: string): Promise<void> {
+  await deleteTasks([taskId]);
 }
 
 export async function insertChecklistItems(taskId: string, itemTexts: string[]): Promise<void> {
@@ -126,6 +220,12 @@ export async function insertChecklistItems(taskId: string, itemTexts: string[]):
   }
 }
 
+export async function replaceChecklistItems(taskId: string, itemTexts: string[]): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("DELETE FROM checklist_items WHERE task_id = ?", taskId);
+  await insertChecklistItems(taskId, itemTexts);
+}
+
 export async function listChecklistItems(taskId: string): Promise<ChecklistItem[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<ChecklistRow>(
@@ -133,6 +233,11 @@ export async function listChecklistItems(taskId: string): Promise<ChecklistItem[
     taskId,
   );
   return rows.map(rowToChecklist);
+}
+
+export async function updateChecklistItemDone(itemId: string, done: boolean): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("UPDATE checklist_items SET done = ? WHERE id = ?", done ? 1 : 0, itemId);
 }
 
 export async function listRecurringCompletions(): Promise<RecurringCompletion[]> {
@@ -280,7 +385,7 @@ function parseStatus(value: string): TaskStatus {
 }
 
 function parseRecurrence(value: string | null): RecurrenceType | null {
-  if (value === "daily" || value === "weekly" || value === "specific_days") return value;
+  if (value === "daily" || value === "weekly" || value === "specific_days" || value === "monthly") return value;
   return null;
 }
 

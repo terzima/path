@@ -1,4 +1,5 @@
-import { Link, router } from "expo-router";
+import { Link, router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { EmptyState } from "../../components/EmptyState";
 import { SectionHeader } from "../../components/SectionHeader";
@@ -7,23 +8,30 @@ import { exportBackup } from "../../lib/db/backup";
 import {
   createRecurringCompletion,
   deleteRecurringCompletion,
-  updateTaskDate,
+  folderNameById,
   updateTaskStatus,
 } from "../../lib/db/queries";
-import { addDays } from "../../lib/dates";
 import type { Task } from "../../lib/types";
-import { isRecurringTaskComplete } from "../recurrence/recurrenceEngine";
+import { getCurrentOccurrenceDate, isRecurringTaskComplete } from "../recurrence/recurrenceEngine";
 import { useOverview } from "./useOverview";
 
 export function OverviewScreen() {
-  const { completions, overdue, recurringDue, refresh, today, todayTasks, totalHours, upcoming } = useOverview();
+  const { completions, overdue, recurringDue, refresh, today, todayTasks, tomorrow, tomorrowTasks, totalHours } = useOverview();
+  const [folderNames, setFolderNames] = useState<Record<string, string>>({});
+
+  useFocusEffect(
+    useCallback(() => {
+      folderNameById().then(setFolderNames);
+    }, []),
+  );
 
   async function toggleTask(task: Task) {
     if (task.recurrenceType) {
-      if (isRecurringTaskComplete(task, today, completions)) {
-        await deleteRecurringCompletion(task.id, today);
+      const completionDate = getCurrentOccurrenceDate(task, today) ?? today;
+      if (isRecurringTaskComplete(task, completionDate, completions)) {
+        await deleteRecurringCompletion(task.id, completionDate);
       } else {
-        await createRecurringCompletion(task.id, today);
+        await createRecurringCompletion(task.id, completionDate);
       }
     } else {
       await updateTaskStatus(task.id, task.status === "done" ? "todo" : "done");
@@ -31,9 +39,32 @@ export function OverviewScreen() {
     await refresh();
   }
 
-  async function moveToTomorrow(task: Task) {
-    await updateTaskDate(task.id, addDays(today, 1));
-    await refresh();
+  function openMove(task: Task) {
+    router.push({
+      pathname: "/modals/bulk-shift",
+      params: { folderId: task.folderId ?? "", selectedTaskIds: task.id },
+    });
+  }
+
+  function openEdit(task: Task) {
+    router.push({ pathname: "/modals/task", params: { folderId: task.folderId ?? "", taskId: task.id } });
+  }
+
+  function row(task: Task, complete: boolean, statusNote?: string) {
+    return (
+      <TaskRow
+        key={task.id}
+        task={task}
+        complete={complete}
+        statusNote={statusNote}
+        showFolderName
+        folderName={task.folderId ? folderNames[task.folderId] : "General"}
+        sequenceGroupLabel={task.sequenceGroupId}
+        onToggle={() => toggleTask(task)}
+        onReschedule={() => openMove(task)}
+        onEdit={() => openEdit(task)}
+      />
+    );
   }
 
   return (
@@ -55,6 +86,11 @@ export function OverviewScreen() {
               <Text style={secondaryButtonTextStyle}>Folders</Text>
             </Pressable>
           </Link>
+          <Link href="/upcoming" asChild>
+            <Pressable style={secondaryButtonStyle}>
+              <Text style={secondaryButtonTextStyle}>Upcoming</Text>
+            </Pressable>
+          </Link>
           <Pressable onPress={exportBackup} style={secondaryButtonStyle}>
             <Text style={secondaryButtonTextStyle}>Backup</Text>
           </Pressable>
@@ -63,27 +99,16 @@ export function OverviewScreen() {
 
       <SectionHeader title="Today" subtitle={today} />
       {todayTasks.length + recurringDue.length === 0 ? <EmptyState title="No work scheduled today" /> : null}
-      {[...todayTasks, ...recurringDue].map((task) => (
-        <TaskRow
-          key={task.id}
-          task={task}
-          complete={task.recurrenceType ? isRecurringTaskComplete(task, today, completions) : task.status === "done"}
-          onToggle={() => toggleTask(task)}
-          onReschedule={() => moveToTomorrow(task)}
-        />
-      ))}
+      {todayTasks.map((task) => row(task, false))}
+      {recurringDue.map((task) => row(task, isRecurringTaskComplete(task, today, completions), "Due today"))}
 
       <SectionHeader title="Overdue" />
       {overdue.length === 0 ? <EmptyState title="Nothing overdue" /> : null}
-      {overdue.map((task) => (
-        <TaskRow key={task.id} task={task} complete={false} onToggle={() => toggleTask(task)} onReschedule={() => moveToTomorrow(task)} />
-      ))}
+      {overdue.map((task) => row(task, false, task.recurrenceType ? "Overdue recurring item" : undefined))}
 
-      <SectionHeader title="Upcoming" />
-      {upcoming.length === 0 ? <EmptyState title="No upcoming tasks" /> : null}
-      {upcoming.map((task) => (
-        <TaskRow key={task.id} task={task} complete={false} onToggle={() => toggleTask(task)} onReschedule={() => moveToTomorrow(task)} />
-      ))}
+      <SectionHeader title="Tomorrow" subtitle={tomorrow} />
+      {tomorrowTasks.length === 0 ? <EmptyState title="No tasks tomorrow" /> : null}
+      {tomorrowTasks.map((task) => row(task, false))}
     </ScrollView>
   );
 }

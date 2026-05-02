@@ -6,7 +6,7 @@ import {
   deleteScheduleChange,
   getLastScheduleChange,
   insertScheduleChange,
-  listTasksForFolder,
+  listTasksForShift,
   updateTaskDates,
 } from "../../lib/db/queries";
 import type { Task } from "../../lib/types";
@@ -21,8 +21,8 @@ export function BulkShiftScreen() {
   const selectedIds = selectedTaskIds ? selectedTaskIds.split(",").filter(Boolean) : [];
 
   useEffect(() => {
-    if (folderId) listTasksForFolder(folderId).then(setTasks);
-  }, [folderId]);
+    listTasksForShift(folderId || null, selectedIds).then(setTasks);
+  }, [folderId, selectedTaskIds]);
 
   const selectedTasks = tasks.filter((task) => selectedIds.includes(task.id));
 

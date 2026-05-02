@@ -1,6 +1,6 @@
 export type EnergyType = "deep" | "light" | "admin";
 export type TaskStatus = "todo" | "done" | "skipped";
-export type RecurrenceType = "daily" | "weekly" | "specific_days";
+export type RecurrenceType = "daily" | "weekly" | "specific_days" | "monthly";
 export type ScheduleChangeReason = "manual-reschedule" | "cascade-shift";
 
 export type Folder = {
