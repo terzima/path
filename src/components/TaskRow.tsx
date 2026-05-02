@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { listChecklistItems } from "../lib/db/queries";
+import { listChecklistItems, updateChecklistItemDone } from "../lib/db/queries";
 import { formatShortDate } from "../lib/dates";
 import type { ChecklistItem, Task } from "../lib/types";
 
@@ -10,20 +10,40 @@ export function TaskRow({
   selected,
   onToggle,
   onReschedule,
+  onEdit,
   onSelect,
+  statusNote,
+  folderName,
+  showFolderName,
+  sequenceGroupLabel,
 }: {
   task: Task;
   complete: boolean;
   selected?: boolean;
   onToggle: () => void;
   onReschedule?: () => void;
+  onEdit?: () => void;
   onSelect?: () => void;
+  statusNote?: string;
+  folderName?: string;
+  showFolderName?: boolean;
+  sequenceGroupLabel?: string | null;
 }) {
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
 
   useEffect(() => {
     listChecklistItems(task.id).then(setChecklistItems);
   }, [task.id]);
+
+  async function toggleChecklistItem(item: ChecklistItem) {
+    const nextDone = !item.done;
+    setChecklistItems((current) =>
+      current.map((currentItem) => (currentItem.id === item.id ? { ...currentItem, done: nextDone } : currentItem)),
+    );
+    await updateChecklistItemDone(item.id, nextDone);
+  }
+
+  const title = showFolderName && folderName ? `${folderName} - ${task.title}` : task.title;
 
   return (
     <View style={{ backgroundColor: "#FFFFFF", borderBottomColor: "#E5E7EB", borderBottomWidth: 1, padding: 14 }}>
@@ -43,9 +63,10 @@ export function TaskRow({
                 textDecorationLine: complete ? "line-through" : "none",
               }}
             >
-              {task.title}
+              {title}
             </Text>
           </Pressable>
+          {statusNote ? <Text style={{ color: "#2563EB", fontSize: 12, fontWeight: "800", marginTop: 4 }}>{statusNote}</Text> : null}
           {task.description ? (
             <Text style={{ color: "#4B5563", marginTop: 4 }} numberOfLines={2}>
               {task.description}
@@ -55,23 +76,39 @@ export function TaskRow({
             {formatShortDate(task.scheduledDate)} - {task.durationHours}h - {task.energyType}
             {task.defaultedDuration ? " - defaulted" : ""}
             {task.sequenceIndex ? ` - #${task.sequenceIndex}` : ""}
+            {sequenceGroupLabel ?? task.sequenceGroupId ? ` - ${sequenceGroupLabel ?? task.sequenceGroupId}` : ""}
             {task.recurrenceType ? ` - ${task.recurrenceType.replace("_", " ")}` : ""}
           </Text>
           {checklistItems.length > 0 ? (
             <View style={{ gap: 3, marginTop: 8 }}>
               {checklistItems.map((item) => (
-                <Text key={item.id} style={{ color: "#4B5563", fontSize: 13 }}>
-                  {item.done ? "[x]" : "[ ]"} {item.text}
-                </Text>
+                <Pressable key={item.id} onPress={() => toggleChecklistItem(item)} hitSlop={6}>
+                  <Text
+                    style={{
+                      color: item.done ? "#6B7280" : "#4B5563",
+                      fontSize: 13,
+                      textDecorationLine: item.done ? "line-through" : "none",
+                    }}
+                  >
+                    {item.done ? "[x]" : "[ ]"} {item.text}
+                  </Text>
+                </Pressable>
               ))}
             </View>
           ) : null}
         </View>
-        {onReschedule ? (
-          <Pressable onPress={onReschedule} hitSlop={10}>
-            <Text style={{ color: "#2563EB", fontWeight: "700" }}>Move</Text>
-          </Pressable>
-        ) : null}
+        <View style={{ alignItems: "flex-end", gap: 10 }}>
+          {onReschedule ? (
+            <Pressable onPress={onReschedule} hitSlop={10}>
+              <Text style={{ color: "#2563EB", fontWeight: "700" }}>Move</Text>
+            </Pressable>
+          ) : null}
+          {onEdit ? (
+            <Pressable onPress={onEdit} hitSlop={10}>
+              <Text style={{ color: "#2563EB", fontWeight: "700" }}>Edit</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
     </View>
   );

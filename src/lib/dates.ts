@@ -25,6 +25,28 @@ export function weekdayNumber(dateKey: string): number {
   return jsDay === 0 ? 7 : jsDay;
 }
 
+export function lastDayOfMonth(year: number, monthIndexZeroBased: number): number {
+  return new Date(year, monthIndexZeroBased + 1, 0).getDate();
+}
+
+export function monthlyOccurrenceDay(anchorDateKey: string, targetDateKey: string): number {
+  const anchor = fromDateKey(anchorDateKey);
+  const target = fromDateKey(targetDateKey);
+  return Math.min(anchor.getDate(), lastDayOfMonth(target.getFullYear(), target.getMonth()));
+}
+
+export function monthKey(dateKey: string): string {
+  return dateKey.slice(0, 7);
+}
+
+export function monthLabel(monthKeyValue: string): string {
+  const [year, month] = monthKeyValue.split("-").map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export function formatShortDate(dateKey: string): string {
   return fromDateKey(dateKey).toLocaleDateString(undefined, {
     month: "short",
