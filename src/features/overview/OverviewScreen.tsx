@@ -111,6 +111,11 @@ export function OverviewScreen() {
           <Pressable onPress={exportBackup} style={secondaryButtonStyle}>
             <Text style={secondaryButtonTextStyle}>Backup</Text>
           </Pressable>
+          <Link href="/about" asChild>
+            <Pressable accessibilityRole="button" style={secondaryButtonStyle}>
+              <Text style={secondaryButtonTextStyle}>Privacy & About</Text>
+            </Pressable>
+          </Link>
         </View>
       </View>
 

@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 7.0.0"
+    "version": ">= 18.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -14,15 +15,15 @@
       "distribution": "internal"
     },
     "production": {
+      "distribution": "store",
       "autoIncrement": true
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleId": "slouis@terzima.com",
-        "ascAppId": "",
-        "appleTeamId": ""
+        "ascAppId": "6820614249",
+        "appleTeamId": "TYK9MH7YN5"
       }
     }
   }

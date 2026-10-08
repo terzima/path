@@ -1,5 +1,7 @@
 # Path
 
+[Website](https://www.terzima.com/path) · [Support](https://www.terzima.com/path/support) · [Privacy](https://www.terzima.com/path/privacy) · [Contributing](CONTRIBUTING.md)
+
 Path is a lightweight personal execution app for turning plans into dated work blocks. It is built for a solo builder managing multiple complex projects, not for teams, collaboration, or productivity-app sprawl.
 
 The core idea is simple:
@@ -14,7 +16,9 @@ Path is currently an Expo React Native app aimed at iPhone first.
 
 ## Status
 
-This project is early and personal-tool oriented. It is intended to become a published app later, but for now the practical install path is a direct iOS internal distribution build through Expo EAS and an Apple Developer account.
+Path is a free, open-source personal planner. Version 1.0.0 is being prepared for the App Store; it is not publicly available there yet. Terzima maintains the official iPhone app. You can also run the source locally or build a fork with your own developer accounts.
+
+The code is MIT licensed. Path branding is reserved; see [BRANDING.md](BRANDING.md). The `private: true` setting in package.json prevents accidental npm publishing and does not control GitHub visibility.
 
 ## Privacy
 
@@ -30,9 +34,9 @@ The app includes a JSON backup export. At the moment, backup is export-only; the
 
 Folders are project containers, such as:
 
-- `Rolo Dev`
-- `Robotics`
-- `Trading Bot`
+- `Product Launch`
+- `Learning`
+- `Personal`
 - `General`
 
 `General` is seeded as the default folder and cannot be deleted.
@@ -413,10 +417,12 @@ Current limitation: there is not yet a Restore Backup action. Checklist items ar
 
 ## Development
 
-Install dependencies:
+Use Node.js 20.19.4 or newer (Node.js 22 LTS recommended). Clone and install the locked dependencies:
 
 ```bash
-npm install
+git clone https://github.com/terzima/path.git
+cd path
+npm ci
 ```
 
 Run Expo locally:
@@ -442,6 +448,28 @@ Export iOS bundle for verification:
 ```bash
 npx expo export --platform ios
 ```
+
+### Run on an iOS simulator
+
+On macOS, install Xcode and an iOS simulator runtime, then run:
+
+```bash
+npm run ios
+```
+
+This generates the ignored `ios/` directory, installs native dependencies, and starts a development build. Simulator development does not require App Store signing credentials. `npm start` starts Metro; press `i` to open a previously installed simulator build. The official store build is standalone and works without Expo Go or Metro.
+
+### Build a fork with your own accounts
+
+The checked-in configuration identifies the official Path app. Before creating cloud builds or distributing a fork:
+
+1. Change `expo.name`, `expo.slug`, `expo.scheme`, and `expo.ios.bundleIdentifier` in app.json. Use your own name and unique bundle ID; add your own Android package if you intend to ship Android.
+2. Replace the branded assets with your own and follow [BRANDING.md](BRANDING.md).
+3. Remove `expo.owner` and `expo.extra.eas.projectId`, then run `npx eas-cli@latest login` and `npx eas-cli@latest init` to link your own Expo project.
+4. Replace the privacy URL and support email with accurate details for your fork.
+5. Remove or replace `submit.production.ios.ascAppId` and `appleTeamId` in eas.json with your own App Store Connect record and Apple team. Configure signing credentials through EAS or Xcode using your own Apple account.
+
+The IDs in the official configuration are identifiers, not passwords or signing keys. They do not grant access to Terzima's accounts. Do not use the official publishing scripts until your fork has its own configuration. Keep credentials outside Git; never commit credentials.json, .env files, private keys, provisioning profiles, archives, or real task exports.
 
 ## Direct Install To iPhone Without TestFlight
 
@@ -491,9 +519,11 @@ Important notes:
 - The iPhone must be registered before the build is signed for that device.
 - If you add another iPhone later, you may need to create a new build or resign the existing build for the new device.
 
-## Publishing Later
+## Official TestFlight and App Store releases
 
-For App Store release later, use the `production` EAS profile and submit through App Store Connect. That path is separate from direct internal install.
+For TestFlight and App Store release, use the `production` EAS profile. Run `npm run release:check`, then `npm run ios:testflight` to build and upload. This creates a standalone app; users do not need Expo Go. Uploading to TestFlight does not publish the app publicly.
+
+See [the release guide](docs/app-store-release.md) for account setup, testing, listing copy, privacy requirements, and App Store submission. The [privacy policy](docs/privacy-policy.md) describes local storage, optional sharing, and support contact.
 
 ## Project Structure
 
@@ -514,4 +544,8 @@ __tests__/                   Jest tests
 
 ## License
 
-No license has been selected yet. Add a license before treating this repository as open source.
+Source code and original documentation are licensed under the [MIT license](LICENSE), copyright © 2026 Terzima LLC. Commercial and noncommercial code reuse are permitted subject to the license notice requirements.
+
+Path and Terzima branding, icons, and branded screenshots are excluded from that grant. See [BRANDING.md](BRANDING.md). Third-party components retain their original licenses; see [JavaScript dependency notices](THIRD_PARTY_NOTICES.txt) and [iOS dependency notices](docs/third-party-ios-notices.md).
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing and [SECURITY.md](SECURITY.md) for private security reports.

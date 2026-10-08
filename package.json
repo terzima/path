@@ -4,19 +4,28 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
+    "android": "expo run:android",
     "web": "expo start --web",
     "test": "jest",
     "test:watch": "jest --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "release:check": "npm run typecheck && npm test -- --runInBand && npx expo-doctor && npx expo export --platform ios",
+    "ios:build": "npx eas-cli@latest build --platform ios --profile production",
+    "ios:submit": "npx eas-cli@latest submit --platform ios --profile production",
+    "ios:testflight": "npx eas-cli@latest build --platform ios --profile production --auto-submit",
+    "ios": "expo run:ios",
+    "notices:generate": "node scripts/generate-third-party-notices.mjs"
   },
   "dependencies": {
-    "expo": "~54.0.33",
+    "expo": "~54.0.37",
+    "expo-constants": "~18.0.14",
     "expo-crypto": "~15.0.9",
     "expo-document-picker": "~14.0.8",
-    "expo-file-system": "~19.0.22",
-    "expo-router": "~6.0.23",
+    "expo-file-system": "~19.0.24",
+    "expo-linking": "~8.0.12",
+    "expo-router": "~6.0.24",
     "expo-sharing": "~14.0.8",
+    "expo-splash-screen": "~31.0.13",
     "expo-sqlite": "~16.0.10",
     "expo-status-bar": "~3.0.9",
     "papaparse": "^5.5.3",
@@ -27,11 +36,11 @@
     "react-native-screens": "~4.16.0"
   },
   "devDependencies": {
-    "@types/jest": "^30.0.0",
+    "@types/jest": "29.5.14",
     "@types/papaparse": "^5.5.2",
     "@types/react": "~19.1.0",
     "jest": "^29.7.0",
-    "jest-expo": "^55.0.16",
+    "jest-expo": "~54.0.18",
     "typescript": "~5.9.2"
   },
   "private": true,
@@ -43,5 +52,14 @@
     "testPathIgnorePatterns": [
       "<rootDir>/.worktrees/"
     ]
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/terzima/path.git"
+  },
+  "homepage": "https://www.terzima.com/path",
+  "bugs": {
+    "url": "https://github.com/terzima/path/issues"
   }
 }
