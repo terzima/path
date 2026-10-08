@@ -20,6 +20,16 @@ Path is a free, open-source personal planner. Version 1.0.0 is being prepared fo
 
 The code is MIT licensed. Path branding is reserved; see [BRANDING.md](BRANDING.md). The `private: true` setting in package.json prevents accidental npm publishing and does not control GitHub visibility.
 
+## Screenshots
+
+Actual app screens with fictional sample tasks:
+
+| Daily overview | Project folder | Upcoming work |
+| --- | --- | --- |
+| ![Path daily overview](marketing/app-store/iphone-medium/01-overview.jpg) | ![Path project folder](marketing/app-store/iphone-medium/03-project.jpg) | ![Path upcoming tasks](marketing/app-store/iphone-medium/02-upcoming.jpg) |
+
+[All App Store screenshots and upload instructions](marketing/app-store/README.md). Screenshots contain reserved Path branding; see [BRANDING.md](BRANDING.md).
+
 ## Privacy
 
 Path stores app data locally with SQLite through `expo-sqlite`.
